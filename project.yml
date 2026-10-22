@@ -7,19 +7,20 @@ settings:
   base:
     DEVELOPMENT_TEAM: SV4P7RNRDK
     CODE_SIGN_STYLE: Automatic
-    CURRENT_PROJECT_VERSION: 1
+    CURRENT_PROJECT_VERSION: 3
     MARKETING_VERSION: 0.1.0
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     CLANG_WARN_DOCUMENTATION_COMMENTS: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_C_LANGUAGE_STANDARD: c11
+    CH348_DRIVER_ENTITLEMENTS: Driver/Driver.entitlements
 targets:
   CH348Driver:
     type: driver-extension
     platform: macOS
     sources:
       - path: Driver
-        excludes: [Info.plist, Driver.entitlements]
+        excludes: [Info.plist, Driver.entitlements, Development.entitlements]
       - path: Protocol
     settings:
       base:
@@ -29,7 +30,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.idy.ch348-macos.driver
         PRODUCT_NAME: com.idy.ch348-macos.driver
         INFOPLIST_FILE: Driver/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Driver/Driver.entitlements
+        CODE_SIGN_ENTITLEMENTS: "$(CH348_DRIVER_ENTITLEMENTS)"
         HEADER_SEARCH_PATHS: ["$(SRCROOT)/Protocol"]
         IIG_FRAMEWORK_NAME: CH348Driver
         GCC_ENABLE_CPP_EXCEPTIONS: NO

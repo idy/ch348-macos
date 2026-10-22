@@ -4,7 +4,7 @@
 
 Native DriverKit driver for WCH CH348 USB to eight UART adapters (`1a86:55d9`). This project targets normal `IOSerialBSDClient` ports usable by existing POSIX serial clients, including H2Loader, without client modifications. It does not create PTYs or modify another application's device enumerator.
 
-**Status: development build; native serial enumeration is not yet working.** The DriverKit extension and installer compile for both `arm64` and `x86_64`. Protocol and ring-buffer tests pass with AddressSanitizer and UndefinedBehaviorSanitizer. The extension has been registered and enabled locally, but macOS refuses to launch it because its development profile does not include this Mac. Live enumeration currently finds zero CH348 serial ports. See [current validation](VALIDATION.md).
+**Status: eight native serial ports verified on an Apple Silicon Mac using a development-signed installation.** The connected CH348Q publishes eight real `IOSerialBSDClient` services, `/dev/cu.CH34800100000-0` through `-7`, with matching `/dev/tty.*` nodes. The extension and installer compile for both `arm64` and `x86_64`; Intel runtime, physical UART traffic, hot-plug, sleep, and reboot acceptance remain untested. Protocol and ring-buffer tests pass with AddressSanitizer and UndefinedBehaviorSanitizer. See [current validation](VALIDATION.md).
 
 ## Architecture
 
@@ -12,13 +12,13 @@ Native DriverKit driver for WCH CH348 USB to eight UART adapters (`1a86:55d9`). 
 
 The device owns one asynchronous data receive request and one asynchronous status request. Outgoing data is scheduled fairly across active UARTs and advances the serial queue only after both the USB write and the UART-empty status complete. An uncompleted transfer has a three-second deadline. Disconnect aborts I/O and terminates the child services. A newly inserted matching device should be matched by macOS automatically after a successful persistent driver activation; hot-plug behavior remains unverified until that installation is available.
 
-The intended callout names are `/dev/cu.CH348<usb-location>-0` through `-7`, with corresponding `/dev/tty.*` nodes. These names describe the implementation's requested naming, not observed hardware results.
+Callout names are `/dev/cu.CH348<usb-location>-0` through `-7`, with corresponding `/dev/tty.*` nodes. All eight names were observed on the qualified adapter at USB location `00100000`. Moving the adapter to another USB port can change the location component.
 
 ## Requirements
 
 - macOS 14 or later and a full Xcode installation with the DriverKit SDK.
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) to generate the Xcode project from `project.yml`.
-- An Apple Developer team with DriverKit, USB transport for `1a86:55d9`, Serial family, and host System Extension installation entitlements in Apple-issued provisioning profiles.
+- A paid Apple Developer team with DriverKit development, USB transport development, Serial family, and host System Extension installation entitlements in Apple-issued provisioning profiles. Distribution additionally requires Apple-approved device/vendor transport grants.
 
 The bundle identifiers are `com.idy.ch348-macos` (installer) and `com.idy.ch348-macos.driver` (driver). `CH348_DEVELOPMENT_TEAM` selects the signing team when building. Development certificates alone do not grant DriverKit entitlements. Apple describes the application and profile requirements in [Requesting Entitlements for DriverKit Development](https://developer.apple.com/documentation/driverkit/requesting-entitlements-for-driverkit-development).
 
@@ -33,7 +33,18 @@ scripts/build.sh --unsigned
 
 This produces `build/Build/Products/Debug/CH348.app`, containing the native `.dext`. The unsigned build is useful for compilation checks and cannot be treated as an installable driver.
 
-After signing authorization is configured, build and install:
+For a local development installation, use Apple's documented development USB entitlement and explicitly opt in:
+
+```sh
+CH348_DEVELOPMENT_TEAM=YOUR_TEAM_ID scripts/build.sh --development
+scripts/install.sh --development
+```
+
+`Driver/Development.entitlements` uses `idVendor=*` in the development signature, as required by [Apple's current DriverKit signing flow](https://developer.apple.com/forums/thread/809202). This grants a broader USB transport capability to the development process. The IOKit matching dictionary and the driver's own identity check both remain restricted to CH348 `1a86:55d9`. The installer rejects this signature unless `--development` is supplied. This mode is for registered development Macs, not a generally distributable release.
+
+The signed build first provisions the concrete **My Mac (DriverKit)** destination, then embeds the extension into the installer. This ensures that the driver's profile includes the current Mac as well as the expected USB/Serial entitlements. Profiles that omit this Mac are rejected before installation.
+
+For an appropriately approved non-development USB grant, keep `Driver/Driver.entitlements` and use:
 
 ```sh
 CH348_DEVELOPMENT_TEAM=YOUR_TEAM_ID scripts/build.sh

@@ -54,7 +54,9 @@ void CH348Port::free() {
 }
 
 kern_return_t IMPL(CH348Port, Start) {
+    os_log(OS_LOG_DEFAULT, "CH348: starting native serial child");
     kern_return_t result = super::Start(provider, SUPERDISPATCH);
+    os_log(OS_LOG_DEFAULT, "CH348: serial superclass start 0x%x", result);
     if (result != kIOReturnSuccess) return result;
     ivars->owner = OSDynamicCast(CH348Device, provider);
     if (ivars->owner == nullptr) return kIOReturnBadArgument;
@@ -88,11 +90,13 @@ kern_return_t IMPL(CH348Port, Start) {
     names->setObject("IOTTYBaseName", name);
     names->setObject("IOTTYSuffix", ending);
     result = SetProperties(names);
+    os_log(OS_LOG_DEFAULT, "CH348: UART%u serial naming 0x%x", ivars->index, result);
     names->release(); name->release(); ending->release();
     if (result != kIOReturnSuccess) return result;
 
     result = ConnectQueues(&ivars->interface_memory, &ivars->rx_memory,
                            &ivars->tx_memory, nullptr, nullptr, 0, 0, 14, 14);
+    os_log(OS_LOG_DEFAULT, "CH348: UART%u queue connection 0x%x", ivars->index, result);
     if (result != kIOReturnSuccess) return result;
     result = ivars->interface_memory->CreateMapping(0, 0, 0, 0, 0, &ivars->interface_map);
     if (result == kIOReturnSuccess)

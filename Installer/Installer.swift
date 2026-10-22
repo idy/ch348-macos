@@ -16,6 +16,13 @@ final class Installer: NSObject, NSApplicationDelegate, OSSystemExtensionRequest
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let menu = NSMenu()
+        let item = NSMenuItem()
+        let application = NSMenu()
+        application.addItem(withTitle: "Quit CH348", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        item.submenu = application
+        menu.addItem(item)
+        NSApp.mainMenu = menu
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 230),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "CH348 Serial Driver"

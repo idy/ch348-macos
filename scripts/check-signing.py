@@ -27,7 +27,16 @@ def permits_device(profile, identifier):
     return profile.get("ProvisionsAllDevices") is True or identifier in profile.get("ProvisionedDevices", [])
 
 
-def validate(app):
+def usb_signature_matches(profile_usb, signature_usb, allow_development=False):
+    wildcard = [{"idVendor": "*"}]
+    if signature_usb == wildcard:
+        return allow_development and profile_usb == wildcard
+    return (isinstance(profile_usb, list) and isinstance(signature_usb, list)
+            and len(signature_usb) == 1 and grants_ch348(signature_usb)
+            and signature_usb[0] in profile_usb)
+
+
+def validate(app, allow_development=False):
     hardware = json.loads(subprocess.check_output(
         ["system_profiler", "SPHardwareDataType", "-json"]))["SPHardwareDataType"][0]
     device = hardware.get("provisioning_UDID", hardware.get("platform_UUID"))
@@ -71,18 +80,24 @@ def validate(app):
                 raise ValueError(f"Profile does not grant {key}: {bundle.name}")
         if bundle == extension:
             usb = entitlements.get("com.apple.developer.driverkit.transport.usb", [])
-            # Apple development profiles can grant all USB vendor IDs; the
-            # driver's own signature must still restrict access to this VID/PID.
-            if not grants_ch348(usb, allow_development_wildcard=True) or not grants_ch348(
-                    actual.get("com.apple.developer.driverkit.transport.usb", [])):
-                raise ValueError("Profile does not grant the CH348 USB transport")
+            signature_usb = actual.get("com.apple.developer.driverkit.transport.usb", [])
+            if not usb_signature_matches(usb, signature_usb, allow_development):
+                raise ValueError("USB signature does not match the profile. Development wildcard builds require explicit --development consent.")
+            personality = info.get("IOKitPersonalities", {}).get("CH348", {})
+            if personality.get("idVendor") != 0x1A86 or personality.get("idProduct") != 0x55D9:
+                raise ValueError("Driver matching must remain restricted to CH348 1a86:55d9")
+            if signature_usb == [{"idVendor": "*"}] and metadata.get("ProvisionsAllDevices"):
+                raise ValueError("Development USB wildcard requires a device-scoped development profile")
     print("Signing profiles validated; macOS activation approval is still required.")
 
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) != 2:
-            raise ValueError("Usage: check-signing.py /path/to/CH348.app")
-        validate(Path(sys.argv[1]).resolve())
+        args = sys.argv[1:]
+        allow_development = "--development" in args
+        args = [arg for arg in args if arg != "--development"]
+        if len(args) != 1:
+            raise ValueError("Usage: check-signing.py [--development] /path/to/CH348.app")
+        validate(Path(args[0]).resolve(), allow_development)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))

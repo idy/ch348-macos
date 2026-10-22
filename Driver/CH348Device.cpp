@@ -62,6 +62,7 @@ bool CH348Device::IsSmallPackage() { return ivars->small_package; }
 bool CH348Device::IsStopping() { return ivars->stopping; }
 
 kern_return_t IMPL(CH348Device, Start) {
+    os_log(OS_LOG_DEFAULT, "CH348: starting USB device service");
     auto result = super::Start(provider, SUPERDISPATCH);
     if (result != kIOReturnSuccess) return result;
     ivars->device = OSDynamicCast(IOUSBHostDevice, provider);
@@ -70,6 +71,7 @@ kern_return_t IMPL(CH348Device, Start) {
     result = ivars->device->Open(this, 0, 0);
     if (result != kIOReturnSuccess) { Cleanup(); return result; }
     ivars->device_open = true;
+    os_log(OS_LOG_DEFAULT, "CH348: USB device opened");
 
     OSDictionary *properties = nullptr;
     result = ivars->device->CopyProperties(&properties);
@@ -139,6 +141,7 @@ kern_return_t IMPL(CH348Device, Start) {
         Cleanup(); return kIOReturnUnsupported;
     }
     if (ivars->max_transmit > 509) ivars->max_transmit = 509;
+    os_log(OS_LOG_DEFAULT, "CH348: multiplexed interface and four bulk endpoints ready");
     for (unsigned slot = 0; slot < 4; ++slot) {
         result = ivars->device->CreateIOBuffer(kIOMemoryDirectionInOut, 512, &ivars->buffers[slot]);
         if (result == kIOReturnSuccess) result = ivars->buffers[slot]->SetLength(512);
@@ -151,6 +154,7 @@ kern_return_t IMPL(CH348Device, Start) {
     if (result != kIOReturnSuccess || version_size != 4) { Cleanup(); return kIOReturnIOError; }
     const auto version = reinterpret_cast<const uint8_t *>(ivars->addresses[ConfigOut].address);
     ivars->small_package = (version[1] & 0x80) != 0;
+    os_log(OS_LOG_DEFAULT, "CH348: chip version 0x%x", version[0]);
 
     result = CreateActionReceiveComplete(0, &ivars->actions[0]);
     if (result == kIOReturnSuccess) result = CreateActionStatusComplete(0, &ivars->actions[1]);
@@ -169,12 +173,14 @@ kern_return_t IMPL(CH348Device, Start) {
         snprintf(key, sizeof(key), "Port%uProperties", index);
         IOService *service = nullptr;
         result = Create(this, key, &service);
+        os_log(OS_LOG_DEFAULT, "CH348: create UART%u returned 0x%x", index, result);
         auto port = OSDynamicCast(CH348Port, service);
         if (result != kIOReturnSuccess || port == nullptr) {
             OSSafeReleaseNULL(service); Cleanup(); return kIOReturnUnsupported;
         }
         ivars->ports[index] = port;
         if (!port->IsStarted()) result = port->Start(this);
+        os_log(OS_LOG_DEFAULT, "CH348: start UART%u returned 0x%x", index, result);
         if (result != kIOReturnSuccess) { Cleanup(); return result; }
         ivars->baud[index] = 115200;
     }
@@ -182,7 +188,9 @@ kern_return_t IMPL(CH348Device, Start) {
     if (result == kIOReturnSuccess)
         result = ivars->pipes[StatusIn]->AsyncIO(ivars->buffers[StatusIn], 512, ivars->actions[1], 0);
     if (result != kIOReturnSuccess) { Cleanup(); return result; }
-    return RegisterService();
+    result = RegisterService();
+    os_log(OS_LOG_DEFAULT, "CH348: eight UART services ready, registration 0x%x", result);
+    return result;
 }
 
 kern_return_t IMPL(CH348Device, Stop) {
