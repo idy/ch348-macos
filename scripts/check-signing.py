@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import fnmatch
+import json
 import plistlib
 import subprocess
 import sys
@@ -22,7 +23,16 @@ def grants_ch348(items, allow_development_wildcard=False):
     return False
 
 
+def permits_device(profile, identifier):
+    return profile.get("ProvisionsAllDevices") is True or identifier in profile.get("ProvisionedDevices", [])
+
+
 def validate(app):
+    hardware = json.loads(subprocess.check_output(
+        ["system_profiler", "SPHardwareDataType", "-json"]))["SPHardwareDataType"][0]
+    device = hardware.get("provisioning_UDID", hardware.get("platform_UUID"))
+    if not device:
+        raise ValueError("Cannot determine this Mac's provisioning identifier")
     extension = app / "Contents/Library/SystemExtensions/com.idy.ch348-macos.driver.dext"
     for bundle, required in [
         (app, {"com.apple.developer.system-extension.install": True}),
@@ -37,6 +47,8 @@ def validate(app):
         decoded = subprocess.run(["security", "cms", "-D", "-i", str(profile)],
                                  check=True, capture_output=True).stdout
         metadata = plistlib.loads(decoded)
+        if not permits_device(metadata, device):
+            raise ValueError(f"Provisioning profile does not include this Mac: {bundle.name}")
         entitlements = metadata.get("Entitlements", {})
         signed = subprocess.run(["codesign", "-d", "--entitlements", ":-", str(bundle)],
                                 check=True, capture_output=True).stdout

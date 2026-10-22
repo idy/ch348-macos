@@ -9,9 +9,9 @@
 | Host protocol tests | PASS with AddressSanitizer and UndefinedBehaviorSanitizer: UART configuration, all eight channels, binary RX/TX framing, truncated/malformed records, status parsing |
 | Host serial-ring tests | PASS with AddressSanitizer and UndefinedBehaviorSanitizer: wrap, empty/full, capacity, invalid indices, 10000 iterations |
 | Normal automatic signing | PASS: Apple Development signature; Apple-issued DriverKit USB/Serial and installer profiles; the driver signature is restricted to `1a86:55d9` |
-| Signature/profile preflight | PASS: bundle IDs, team, profile expiry, and required entitlements verified |
-| Native driver activation | NOT RUN: signed installer is ready; macOS activation is the next acceptance step |
-| Eight native serial services | NOT VERIFIED: the driver has not been activated; no `IOSerialBSDClient` acceptance evidence exists |
+| Signature/profile checks | Bundle IDs, team, expiry, and USB/Serial grants pass; device-membership check correctly rejects the current driver profile because it does not include this Mac |
+| Native driver activation | Extension registration PASS: `activated enabled`; kernel launch BLOCKED with `Provisioning profile does not allow this device` |
+| Eight native serial services | NOT PASSED: live `IOSerialBSDClient` enumeration returns zero CH348 ports |
 | UART electrical and data-path acceptance | NOT RUN: attached boards were excluded from this task |
 | Hot-plug, restart, sleep and uninstall | NOT RUN: require native activation first |
 
@@ -19,7 +19,7 @@ The earlier PTY experiment was stopped and its GizOS changes and local port alia
 
 ## Remaining acceptance
 
-1. Sign using a valid Apple account and profiles granting the declared DriverKit USB/Serial entitlements.
+1. Regenerate the DriverKit development profile to include this registered Mac, then rebuild and replace the installed extension. The installer app's profile already includes this Mac; the driver profile was created before device registration and does not.
 2. Activate the extension through the included installer and confirm its enabled state with `systemextensionsctl list`.
 3. Observe eight real `IOSerialBSDClient` services and matching `/dev/cu.CH348*` nodes with `scripts/verify-ports.py`, without sending any board commands.
 4. Unplug/reconnect the adapter and restart macOS; verify that eight native ports return without relaunching a bridge process.

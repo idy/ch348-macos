@@ -9,6 +9,12 @@ spec.loader.exec_module(signing)
 
 
 class USBProfileTests(unittest.TestCase):
+    def test_profile_must_include_the_installation_device(self):
+        self.assertTrue(signing.permits_device({"ProvisionedDevices": ["local-mac"]}, "local-mac"))
+        self.assertFalse(signing.permits_device({"ProvisionedDevices": ["other-mac"]}, "local-mac"))
+        self.assertFalse(signing.permits_device({}, "local-mac"))
+        self.assertTrue(signing.permits_device({"ProvisionsAllDevices": True}, "local-mac"))
+
     def test_development_profile_wildcard_does_not_broaden_driver_signature(self):
         profile = [{"idVendor": "*"}]
         self.assertTrue(signing.grants_ch348(profile, True))

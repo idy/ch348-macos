@@ -4,7 +4,7 @@
 
 Native DriverKit driver for WCH CH348 USB to eight UART adapters (`1a86:55d9`). This project targets normal `IOSerialBSDClient` ports usable by existing POSIX serial clients, including H2Loader, without client modifications. It does not create PTYs or modify another application's device enumerator.
 
-**Status: development build; not installed or hardware-qualified.** The DriverKit extension and installer compile for both `arm64` and `x86_64`. Protocol and ring-buffer tests pass with AddressSanitizer and UndefinedBehaviorSanitizer. Native enumeration and serial I/O still require a correctly provisioned installation and hardware acceptance. See [current validation](VALIDATION.md).
+**Status: development build; native serial enumeration is not yet working.** The DriverKit extension and installer compile for both `arm64` and `x86_64`. Protocol and ring-buffer tests pass with AddressSanitizer and UndefinedBehaviorSanitizer. The extension has been registered and enabled locally, but macOS refuses to launch it because its development profile does not include this Mac. Live enumeration currently finds zero CH348 serial ports. See [current validation](VALIDATION.md).
 
 ## Architecture
 
@@ -40,7 +40,7 @@ CH348_DEVELOPMENT_TEAM=YOUR_TEAM_ID scripts/build.sh
 scripts/install.sh
 ```
 
-The installer script first validates the signatures, profile expiration, bundle IDs, signing teams, and required entitlements. It then copies the app to `~/Applications/CH348.app` and requests activation using Apple's System Extensions framework. Complete any macOS approval prompt. Keep the app installed because it contains the registered extension. To remove the driver, open the app and choose **Uninstall**.
+The installer script first validates the signatures, profile expiration, bundle IDs, signing teams, and required entitlements. It then copies the app to `/Applications/CH348.app` and requests activation using Apple's System Extensions framework. The global `/Applications` directory is required; macOS rejects activation from `~/Applications` with `OSSystemExtensionErrorDomain` code 3. If the script cannot write there, copy the signed app using Finder and open it. Complete any macOS approval prompt. Keep the app installed because it contains the registered extension. To remove the driver, open the app and choose **Uninstall**.
 
 No script changes SIP, boot security, NVRAM, system extension developer mode, or USB device firmware. If normal signing or activation fails, resolve the reported account/profile/approval problem before proceeding.
 
