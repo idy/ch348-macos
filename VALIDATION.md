@@ -14,7 +14,7 @@
 | Raw UART6 and UART7 receive | PASS at 460800/8N1: an eight-second concurrent capture received 214 readable text bytes from each port, including ESP-IDF logs |
 | Bidirectional command communication | PASS on UART0, UART1, UART4, UART6 and UART7 using the unmodified H2Loader CLI and read-only `status`; UART4 required about 14 seconds, so a short timeout was insufficient |
 | Concurrent UART6 and UART7 command exchange | PASS at 460800/8N1: independent CLI processes returned the expected, distinct ESP32-S3 board identities in 1.518 and 1.302 seconds respectively |
-| Existing GUI client | PASS: the unmodified H6 Batch Loader connects on UART5, UART6 and UART7, displays the attached boards' identities and active App versions, and completes a subsequent status refresh |
+| Existing GUI client | PASS on UART6 and UART7: the unmodified H6 Batch Loader displays the attached boards' identities and active App versions and completes a subsequent status refresh on both |
 | Repeated queue setup | PASS: raw capture opened and closed all eight ports at 115200, 460800 and 921600, followed by a successful application connection at 460800 |
 | Protocol tests | PASS with ASan/UBSan: configuration, version-gated packet-upload initialization, eight-channel framing, and malformed/truncated records |
 | Serial-ring tests | PASS with ASan/UBSan: physical buffer wrap, monotonic counters beyond the ring capacity, 10000 iterations, full/invalid states and `UINT32_MAX` rollover |
@@ -37,6 +37,8 @@ A separate disconnect crash was traced to cancelling a DriverKit timer with a nu
 Earlier H2Loader attempts timed out with the faulty receive queues. UART6 and UART7 also initially had no received data. With known-working boards kept on those channels, both raw capture and concurrent status exchanges succeeded on the already-installed build 11, without a further driver change. The exact cause of those earlier two-channel timeouts has not been isolated; no channel-specific workaround is claimed.
 
 Additional attempts, including repeat CLI checks after the successful UART6/UART7 exchange, reported `UNAVAILABLE` while H6 Batch Loader held the ports exclusively. Those are contention results, not communication failures or successful reconnect tests. The GUI continued to show the same UART6/UART7 boards connected.
+
+The GUI also retained a previous identity for UART5, but a fresh status request on that row timed out. That pending request was cancelled, leaving UART6 and UART7 connected. The cached UART5 identity is excluded from independent acceptance; only the UART6/UART7 board fixtures were fixed for this final check.
 
 ## Reproduce
 
