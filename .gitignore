@@ -1,0 +1,7 @@
+build*/
+*.xcodeproj/
+*.xcworkspace/
+*.provisionprofile
+*.mobileprovision
+.DS_Store
+__pycache__/

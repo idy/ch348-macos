@@ -1,0 +1,39 @@
+#include <DriverKit/IOService.iig>
+#include <DriverKit/OSAction.iig>
+#include <DriverKit/IOTimerDispatchSource.iig>
+#include <USBDriverKit/IOUSBHostPipe.iig>
+
+class CH348Device : public IOService {
+public:
+    bool init() override;
+    void free() override;
+    kern_return_t Start(IOService *provider) override;
+    kern_return_t Stop(IOService *provider) override;
+
+    virtual void ReceiveComplete(OSAction *action, IOReturn status,
+        uint32_t actualByteCount, uint64_t completionTimestamp)
+        TYPE(IOUSBHostPipe::CompleteAsyncIO);
+    virtual void StatusComplete(OSAction *action, IOReturn status,
+        uint32_t actualByteCount, uint64_t completionTimestamp)
+        TYPE(IOUSBHostPipe::CompleteAsyncIO);
+    virtual void TransmitComplete(OSAction *action, IOReturn status,
+        uint32_t actualByteCount, uint64_t completionTimestamp)
+        TYPE(IOUSBHostPipe::CompleteAsyncIO);
+    virtual void TransmitTimeout(OSAction *action, uint64_t time)
+        TYPE(IOTimerDispatchSource::TimerOccurred);
+
+    kern_return_t ConfigurePort(uint32_t port, uint32_t baud,
+        uint8_t bits, uint8_t halfStops, uint8_t parity) LOCALONLY;
+    kern_return_t SetPortActive(uint32_t port, bool active) LOCALONLY;
+    kern_return_t WriteRegister(uint32_t port, uint8_t reg,
+        uint8_t value, bool bitWrite) LOCALONLY;
+    uint32_t Location() LOCALONLY;
+    bool IsSmallPackage() LOCALONLY;
+    bool IsStopping() LOCALONLY;
+    void PumpTransmit() LOCALONLY;
+    void FinishTransmit() LOCALONLY;
+    void Fail(kern_return_t error) LOCALONLY;
+    kern_return_t Command(const uint8_t *data, uint32_t length) LOCALONLY;
+    int Deliver(uint32_t port, const uint8_t *data, uint32_t length) LOCALONLY;
+    void Cleanup() LOCALONLY;
+};

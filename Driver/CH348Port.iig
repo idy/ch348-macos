@@ -1,0 +1,32 @@
+#include <SerialDriverKit/IOUserSerial.iig>
+
+class CH348Port : public IOUserSerial {
+public:
+    bool init() override;
+    void free() override;
+    kern_return_t Start(IOService *provider) override;
+    kern_return_t Stop(IOService *provider) override;
+    kern_return_t HwActivate() override;
+    kern_return_t HwDeactivate() override;
+    kern_return_t HwResetFIFO(bool tx, bool rx) override;
+    kern_return_t HwSendBreak(bool sendBreak) override;
+    kern_return_t HwProgramUART(uint32_t baudRate, uint8_t nDataBits,
+        uint8_t nHalfStopBits, uint8_t parity) override;
+    kern_return_t HwProgramBaudRate(uint32_t baudRate) override;
+    kern_return_t HwProgramMCR(bool dtr, bool rts) override;
+    kern_return_t HwGetModemStatus(bool *cts, bool *dsr,
+        bool *ri, bool *dcd) override;
+    kern_return_t HwProgramLatencyTimer(uint32_t latency) override;
+    kern_return_t HwProgramFlowControl(uint32_t arg,
+        uint8_t xon, uint8_t xoff) override;
+    void TxDataAvailable() override;
+    void RxFreeSpaceAvailable() override;
+
+    bool IsStarted() LOCALONLY;
+    uint32_t CopyTransmit(uint8_t *out, uint32_t capacity) LOCALONLY;
+    void ConsumeTransmit(uint32_t size) LOCALONLY;
+    int Receive(const uint8_t *data, uint32_t size) LOCALONLY;
+    void UpdateModem(uint8_t status) LOCALONLY;
+    void ReportLineError(uint8_t status) LOCALONLY;
+    void Cleanup() LOCALONLY;
+};
