@@ -34,6 +34,18 @@ struct CH348Port_IVars {
     uint8_t *tx;
     uint32_t rx_size;
     uint32_t tx_size;
+    uint64_t tx_notifications;
+    uint64_t tx_submitted;
+    uint64_t tx_nonzero;
+    uint64_t tx_completed;
+    uint64_t rx_received;
+    uint64_t rx_nonzero;
+    uint64_t rx_delivered;
+    uint64_t line_errors;
+    uint8_t line_error_flags;
+    uint64_t configuration_acks;
+    uint32_t acknowledged_baud;
+    uint32_t acknowledgement_source;
 };
 
 bool CH348Port::init() {
@@ -94,33 +106,8 @@ kern_return_t IMPL(CH348Port, Start) {
     names->release(); name->release(); ending->release();
     if (result != kIOReturnSuccess) return result;
 
-    result = ConnectQueues(&ivars->interface_memory, &ivars->rx_memory,
-                           &ivars->tx_memory, nullptr, nullptr, 0, 0, 14, 14);
-    os_log(OS_LOG_DEFAULT, "CH348: UART%u queue connection 0x%x", ivars->index, result);
-    if (result != kIOReturnSuccess) return result;
-    result = ivars->interface_memory->CreateMapping(0, 0, 0, 0, 0, &ivars->interface_map);
-    if (result == kIOReturnSuccess)
-        result = ivars->rx_memory->CreateMapping(0, 0, 0, 0, 0, &ivars->rx_map);
-    if (result == kIOReturnSuccess)
-        result = ivars->tx_memory->CreateMapping(0, 0, 0, 0, 0, &ivars->tx_map);
-    if (result != kIOReturnSuccess) { Cleanup(); return result; }
-    if (ivars->interface_map->GetLength() < sizeof(*ivars->queue)) {
-        Cleanup(); return kIOReturnBadArgument;
-    }
-    ivars->queue = reinterpret_cast<driverkit::serial::SerialPortInterface *>(
-        ivars->interface_map->GetAddress());
-    if (ivars->queue->rxqlogsz > 30 || ivars->queue->txqlogsz > 30) {
-        Cleanup(); return kIOReturnBadArgument;
-    }
-    ivars->rx_size = 1u << ivars->queue->rxqlogsz;
-    ivars->tx_size = 1u << ivars->queue->txqlogsz;
-    if (uint64_t(ivars->queue->rxqoffset) + ivars->rx_size > ivars->rx_map->GetLength() ||
-        uint64_t(ivars->queue->txqoffset) + ivars->tx_size > ivars->tx_map->GetLength()) {
-        Cleanup(); return kIOReturnBadArgument;
-    }
-    ivars->rx = reinterpret_cast<uint8_t *>(ivars->rx_map->GetAddress()) + ivars->queue->rxqoffset;
-    ivars->tx = reinterpret_cast<uint8_t *>(ivars->tx_map->GetAddress()) + ivars->queue->txqoffset;
     ivars->started = true;
+    PublishStatistics();
     return RegisterService();
 }
 
@@ -132,13 +119,60 @@ kern_return_t IMPL(CH348Port, Stop) {
     return super::Stop(provider, SUPERDISPATCH);
 }
 
+kern_return_t IMPL(CH348Port, ConnectQueues) {
+    if (ivars->active) return kIOReturnBusy;
+    Cleanup();
+    // IOUserSerial calls this hook when a client opens the port. Map exactly
+    // the buffers returned to that client, rather than allocating a separate
+    // set in Start() which a subsequent open would replace.
+    auto result = super::ConnectQueues(ifmd, rxqmd, txqmd, in_rxqmd, in_txqmd,
+        in_rxqoffset, in_txqoffset, in_rxqlogsz, in_txqlogsz, SUPERDISPATCH);
+    if (result != kIOReturnSuccess) return result;
+    if (!*ifmd || !*rxqmd || !*txqmd) return kIOReturnNoMemory;
+    ivars->interface_memory = *ifmd;
+    ivars->rx_memory = *rxqmd;
+    ivars->tx_memory = *txqmd;
+    ivars->interface_memory->retain();
+    ivars->rx_memory->retain();
+    ivars->tx_memory->retain();
+    result = ivars->interface_memory->CreateMapping(0, 0, 0, 0, 0, &ivars->interface_map);
+    if (result == kIOReturnSuccess)
+        result = ivars->rx_memory->CreateMapping(0, 0, 0, 0, 0, &ivars->rx_map);
+    if (result == kIOReturnSuccess)
+        result = ivars->tx_memory->CreateMapping(0, 0, 0, 0, 0, &ivars->tx_map);
+    if (result != kIOReturnSuccess) { Cleanup(); return result; }
+    if (ivars->interface_map->GetLength() < sizeof(*ivars->queue)) {
+        Cleanup(); return kIOReturnBadArgument;
+    }
+    ivars->queue = reinterpret_cast<driverkit::serial::SerialPortInterface *>(
+        ivars->interface_map->GetAddress());
+    if (ivars->queue->rxqlogsz == 0 || ivars->queue->txqlogsz == 0 ||
+        ivars->queue->rxqlogsz > 30 || ivars->queue->txqlogsz > 30) {
+        Cleanup(); return kIOReturnBadArgument;
+    }
+    ivars->rx_size = 1u << ivars->queue->rxqlogsz;
+    ivars->tx_size = 1u << ivars->queue->txqlogsz;
+    if (uint64_t(ivars->queue->rxqoffset) + ivars->rx_size > ivars->rx_map->GetLength() ||
+        uint64_t(ivars->queue->txqoffset) + ivars->tx_size > ivars->tx_map->GetLength()) {
+        Cleanup(); return kIOReturnBadArgument;
+    }
+    ivars->rx = reinterpret_cast<uint8_t *>(ivars->rx_map->GetAddress()) + ivars->queue->rxqoffset;
+    ivars->tx = reinterpret_cast<uint8_t *>(ivars->tx_map->GetAddress()) + ivars->queue->txqoffset;
+    return kIOReturnSuccess;
+}
+
+kern_return_t IMPL(CH348Port, DisconnectQueues) {
+    ivars->active = false;
+    Cleanup();
+    return super::DisconnectQueues(SUPERDISPATCH);
+}
+
 void CH348Port::Cleanup() {
     if (ivars == nullptr) return;
     ivars->queue = nullptr;
     OSSafeReleaseNULL(ivars->tx_map);
     OSSafeReleaseNULL(ivars->rx_map);
     OSSafeReleaseNULL(ivars->interface_map);
-    if (ivars->interface_memory != nullptr) (void)DisconnectQueues();
     OSSafeReleaseNULL(ivars->tx_memory);
     OSSafeReleaseNULL(ivars->rx_memory);
     OSSafeReleaseNULL(ivars->interface_memory);
@@ -147,7 +181,8 @@ void CH348Port::Cleanup() {
 bool CH348Port::IsStarted() { return ivars->started; }
 
 kern_return_t IMPL(CH348Port, HwActivate) {
-    if (ivars->owner == nullptr || ivars->owner->IsStopping()) return kIOReturnNotReady;
+    if (ivars->owner == nullptr || ivars->owner->IsStopping() || ivars->queue == nullptr)
+        return kIOReturnNotReady;
     kern_return_t result = ivars->owner->ConfigurePort(ivars->index, ivars->baud,
         ivars->bits, ivars->half_stops, ivars->parity);
     if (result == kIOReturnSuccess) result = ivars->owner->SetPortActive(ivars->index, true);
@@ -157,6 +192,7 @@ kern_return_t IMPL(CH348Port, HwActivate) {
 
 kern_return_t IMPL(CH348Port, HwDeactivate) {
     ivars->active = false;
+    PublishStatistics();
     if (ivars->owner == nullptr || ivars->owner->IsStopping()) return kIOReturnSuccess;
     return ivars->owner->SetPortActive(ivars->index, false);
 }
@@ -173,7 +209,8 @@ kern_return_t IMPL(CH348Port, HwProgramUART) {
 }
 
 kern_return_t IMPL(CH348Port, HwProgramBaudRate) {
-    return HwProgramUART(baudRate, ivars->bits, ivars->half_stops, ivars->parity);
+    // Invoke the local hardware hook without sending another RPC.
+    return HwProgramUART_Impl(baudRate, ivars->bits, ivars->half_stops, ivars->parity);
 }
 
 kern_return_t IMPL(CH348Port, HwResetFIFO) {
@@ -218,6 +255,7 @@ kern_return_t IMPL(CH348Port, HwProgramFlowControl) {
 }
 
 void IMPL(CH348Port, TxDataAvailable) {
+    ++ivars->tx_notifications;
     if (ivars->owner != nullptr && ivars->active) ivars->owner->PumpTransmit();
 }
 
@@ -227,35 +265,42 @@ uint32_t CH348Port::CopyTransmit(uint8_t *out, uint32_t capacity) {
     if (!ivars->active || ivars->queue == nullptr) return 0;
     const uint32_t producer = __atomic_load_n(&ivars->queue->txPI, __ATOMIC_ACQUIRE);
     const uint32_t consumer = __atomic_load_n(&ivars->queue->txCI, __ATOMIC_RELAXED);
-    if (producer >= ivars->tx_size || consumer >= ivars->tx_size) {
-        ivars->owner->Fail(kIOReturnBadArgument); return 0;
-    }
     uint32_t count = 0;
     if (ch348_ring_peek(ivars->tx, ivars->tx_size, producer, consumer,
                          out, capacity, &count) != 0) {
         ivars->owner->Fail(kIOReturnBadArgument); return 0;
     }
+    for (uint32_t index = 0; index < count; ++index)
+        ivars->tx_nonzero += out[index] != 0;
     return count;
+}
+
+void CH348Port::RecordTransmitSubmission(uint32_t size) {
+    ivars->tx_submitted += size;
 }
 
 void CH348Port::ConsumeTransmit(uint32_t size) {
     if (ivars->queue == nullptr) return;
     const uint32_t consumer = __atomic_load_n(&ivars->queue->txCI, __ATOMIC_RELAXED);
-    __atomic_store_n(&ivars->queue->txCI, (consumer + size) & (ivars->tx_size - 1u), __ATOMIC_RELEASE);
+    __atomic_store_n(&ivars->queue->txCI, consumer + size, __ATOMIC_RELEASE);
+    ivars->tx_completed += size;
     TxFreeSpaceAvailable();
 }
 
 int CH348Port::Receive(const uint8_t *data, uint32_t size) {
+    ivars->rx_received += size;
+    for (uint32_t index = 0; index < size; ++index)
+        ivars->rx_nonzero += data[index] != 0;
     if (!ivars->active || ivars->queue == nullptr) return 0;
     const uint32_t producer = __atomic_load_n(&ivars->queue->rxPI, __ATOMIC_RELAXED);
     const uint32_t consumer = __atomic_load_n(&ivars->queue->rxCI, __ATOMIC_ACQUIRE);
-    if (producer >= ivars->rx_size || consumer >= ivars->rx_size) return -1;
     uint32_t next = producer;
     if (ch348_ring_append(ivars->rx, ivars->rx_size, producer, consumer,
                            data, size, &next) != 0) {
         RxError(true, false, false, false); return -1;
     }
     __atomic_store_n(&ivars->queue->rxPI, next, __ATOMIC_RELEASE);
+    ivars->rx_delivered += size;
     RxDataAvailable();
     return 0;
 }
@@ -267,6 +312,45 @@ void CH348Port::UpdateModem(uint8_t status) {
 }
 
 void CH348Port::ReportLineError(uint8_t status) {
+    ++ivars->line_errors;
+    ivars->line_error_flags |= status & 0x1e;
     (void)RxError((status & 2) != 0, (status & 16) != 0,
                   (status & 8) != 0, (status & 4) != 0);
+}
+
+void CH348Port::ConfigurationAcknowledged(uint32_t baud, uint32_t source) {
+    ++ivars->configuration_acks;
+    ivars->acknowledged_baud = baud;
+    ivars->acknowledgement_source = source;
+}
+
+void CH348Port::PublishStatistics() {
+    auto values = OSDictionary::withCapacity(17);
+    if (values == nullptr) return;
+    const struct { const char *name; uint64_t value; } counters[] = {
+        {"CH348TxNotifications", ivars->tx_notifications},
+        {"CH348TxSubmittedBytes", ivars->tx_submitted},
+        {"CH348TxNonzeroBytes", ivars->tx_nonzero},
+        {"CH348TxCompletedBytes", ivars->tx_completed},
+        {"CH348RxReceivedBytes", ivars->rx_received},
+        {"CH348RxNonzeroBytes", ivars->rx_nonzero},
+        {"CH348RxDeliveredBytes", ivars->rx_delivered},
+        {"CH348LineErrorEvents", ivars->line_errors},
+        {"CH348LineErrorFlags", ivars->line_error_flags},
+        {"CH348BaudRate", ivars->baud},
+        {"CH348DataBits", ivars->bits},
+        {"CH348HalfStopBits", ivars->half_stops},
+        {"CH348Parity", ivars->parity},
+        {"CH348DriverBuild", CH348_BUILD_NUMBER},
+        {"CH348ConfigurationAcknowledgements", ivars->configuration_acks},
+        {"CH348AcknowledgedBaudRate", ivars->acknowledged_baud},
+        {"CH348AcknowledgementSource", ivars->acknowledgement_source},
+    };
+    for (const auto &counter : counters) {
+        auto value = OSNumber::withNumber(counter.value, 64);
+        if (value != nullptr) { values->setObject(counter.name, value); value->release(); }
+    }
+    // Snapshot at service start and client close, avoiding a registry RPC per packet.
+    (void)SetProperties(values);
+    values->release();
 }

@@ -20,6 +20,15 @@ static int receive(void *user, unsigned port, const uint8_t *data, size_t size) 
 }
 
 static void test_configuration(void) {
+  uint8_t upload[CH348_UPLOAD_MODE_SIZE];
+  const uint8_t upload_expected[] = {0x90, 0x9d, 1, 0, 0, 0, 0, 0};
+  assert(ch348_encode_upload_mode(upload, 0x89) == 0u);
+  assert(ch348_encode_upload_mode(NULL, 0x90) == 0u);
+  assert(ch348_encode_upload_mode(upload, 0x8a) == sizeof(upload));
+  assert(memcmp(upload, upload_expected, sizeof(upload)) == 0);
+  memset(upload, 0xff, sizeof(upload));
+  assert(ch348_encode_upload_mode(upload, 0x90) == sizeof(upload));
+  assert(memcmp(upload, upload_expected, sizeof(upload)) == 0);
   uint8_t config[CH348_CONFIG_SIZE];
   const uint8_t expected[] = {
       0x97, 0xa1, 7, 0, 7, 8, 0, 0, 0, 8, 5, 0,

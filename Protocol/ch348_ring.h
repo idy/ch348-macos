@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-/* Indices are offsets into a power-of-two ring with one empty slot.
+/* Indices are monotonic uint32_t counters with unsigned overflow. Mask only
+ * physical byte offsets into the power-of-two ring, which has one empty slot.
  * Synchronization and publishing the returned index belong to the caller. */
 int ch348_ring_peek(const uint8_t *ring, uint32_t size, uint32_t producer,
                     uint32_t consumer, uint8_t *out, uint32_t capacity,

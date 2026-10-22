@@ -2,6 +2,14 @@
 
 #include <string.h>
 
+size_t ch348_encode_upload_mode(uint8_t out[CH348_UPLOAD_MODE_SIZE],
+                                uint8_t chip_version) {
+  if (out == NULL || chip_version < 0x8au) return 0u;
+  const uint8_t command[CH348_UPLOAD_MODE_SIZE] = {0x90u, 0x9du, 1u};
+  memcpy(out, command, sizeof(command));
+  return sizeof(command);
+}
+
 int ch348_encode_config(uint8_t out[CH348_CONFIG_SIZE], unsigned port,
                         uint32_t baud, unsigned data_bits,
                         unsigned stop_bits, unsigned parity) {

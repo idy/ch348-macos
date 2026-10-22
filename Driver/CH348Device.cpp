@@ -155,6 +155,14 @@ kern_return_t IMPL(CH348Device, Start) {
     const auto version = reinterpret_cast<const uint8_t *>(ivars->addresses[ConfigOut].address);
     ivars->small_package = (version[1] & 0x80) != 0;
     os_log(OS_LOG_DEFAULT, "CH348: chip version 0x%x", version[0]);
+    // Newer silicon supports independent upload on each UART. Enable the
+    // vendor's packet upload mode before posting the shared receive transfer.
+    uint8_t upload[CH348_UPLOAD_MODE_SIZE];
+    const auto upload_size = ch348_encode_upload_mode(upload, version[0]);
+    if (upload_size != 0) {
+        result = Command(upload, uint32_t(upload_size));
+        if (result != kIOReturnSuccess) { Cleanup(); return result; }
+    }
 
     result = CreateActionReceiveComplete(0, &ivars->actions[0]);
     if (result == kIOReturnSuccess) result = CreateActionStatusComplete(0, &ivars->actions[1]);
@@ -201,7 +209,15 @@ kern_return_t IMPL(CH348Device, Stop) {
 void CH348Device::Cleanup() {
     if (ivars == nullptr) return;
     ivars->stopping = true;
-    if (ivars->timer != nullptr) (void)ivars->timer->Cancel(nullptr);
+    if (ivars->timer != nullptr) {
+        // DriverKit invokes the cancellation handler asynchronously. It must
+        // be non-null, and the timer's owned reference must survive until it
+        // runs. The block deliberately does not capture this or ivars.
+        IOTimerDispatchSource *timer = ivars->timer;
+        ivars->timer = nullptr;
+        const auto cancelled = timer->Cancel(^{ timer->release(); });
+        if (cancelled != kIOReturnSuccess) timer->release();
+    }
     for (auto &pipe : ivars->pipes) {
         if (pipe != nullptr) (void)pipe->Abort(kIOUSBAbortSynchronous, kIOReturnAborted, nullptr);
     }
@@ -269,9 +285,15 @@ kern_return_t CH348Device::SetPortActive(uint32_t port, bool active) {
         return kIOReturnSuccess;
     }
     auto result = WriteRegister(port, 1, active ? 0x0f : 0, false);
-    if (active && result == kIOReturnSuccess) result = WriteRegister(port, 2, 0x81, false);
+    // Opening a new client initializes both UART FIFOs, as required by the
+    // device's activation sequence. WriteRegister refuses to clear an active
+    // in-flight transmit on this channel.
+    if (active && result == kIOReturnSuccess) result = WriteRegister(port, 2, 0x87, false);
     // Enable only OUT2; do not rewrite DTR/RTS during activation or deactivation.
     if (active && result == kIOReturnSuccess) result = WriteRegister(port, 4, 0x31, true);
+    // Start without hardware flow control, including when another OS or client
+    // previously enabled it. This bit write also preserves DTR/RTS.
+    if (active && result == kIOReturnSuccess) result = WriteRegister(port, 4, 0x50, true);
     if (result == kIOReturnSuccess) ivars->active[port] = active;
     return result;
 }
@@ -305,7 +327,14 @@ void IMPL(CH348Device, StatusComplete) {
     for (uint32_t offset = 0; offset < actualByteCount;) {
         const uint8_t port = bytes[offset] & 0x0f;
         const uint8_t reg = bytes[offset + 1];
-        if (reg == 0xa1) { offset += 12; continue; }
+        if (reg == 0xa1) {
+            const uint8_t target = bytes[offset + 2] & 0x0f;
+            const uint32_t baud = (uint32_t(bytes[offset + 3]) << 24) |
+                (uint32_t(bytes[offset + 4]) << 16) |
+                (uint32_t(bytes[offset + 5]) << 8) | bytes[offset + 6];
+            if (target < 8) ivars->ports[target]->ConfigurationAcknowledged(baud, port);
+            offset += 12; continue;
+        }
         if (reg >= 0x97 && reg <= 0x9d) { offset += 4; continue; }
         if (reg >= 0xa3 && reg <= 0xa7) { offset += reg == 0xa7 ? 10 : 3; continue; }
         if (reg != 0 && (reg & 0x0f) == 0) ivars->ports[port]->UpdateModem(bytes[offset + 2]);
@@ -341,6 +370,7 @@ void CH348Device::PumpTransmit() {
         if (result == kIOReturnSuccess)
             result = ivars->pipes[DataOut]->AsyncIO(ivars->buffers[DataOut], uint32_t(count), ivars->actions[2], 1000);
         if (result != kIOReturnSuccess) Fail(result);
+        else ivars->ports[port]->RecordTransmitSubmission(size);
         return;
     }
 }

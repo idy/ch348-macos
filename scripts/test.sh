@@ -10,4 +10,4 @@ xcrun clang -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \
     -o build/tests/ring
 build/tests/protocol
 build/tests/ring
-python3 -m unittest discover -s Tests -p 'test_signing.py'
+python3 -m unittest discover -s Tests -p 'test_*.py'

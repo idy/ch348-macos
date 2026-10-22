@@ -6,6 +6,12 @@ public:
     void free() override;
     kern_return_t Start(IOService *provider) override;
     kern_return_t Stop(IOService *provider) override;
+    kern_return_t ConnectQueues(IOBufferMemoryDescriptor **ifmd,
+        IOMemoryDescriptor **rxqmd, IOMemoryDescriptor **txqmd,
+        IOMemoryDescriptor *in_rxqmd, IOMemoryDescriptor *in_txqmd,
+        uint32_t in_rxqoffset, uint32_t in_txqoffset,
+        uint8_t in_rxqlogsz, uint8_t in_txqlogsz) override;
+    kern_return_t DisconnectQueues() override;
     kern_return_t HwActivate() override;
     kern_return_t HwDeactivate() override;
     kern_return_t HwResetFIFO(bool tx, bool rx) override;
@@ -24,9 +30,12 @@ public:
 
     bool IsStarted() LOCALONLY;
     uint32_t CopyTransmit(uint8_t *out, uint32_t capacity) LOCALONLY;
+    void RecordTransmitSubmission(uint32_t size) LOCALONLY;
     void ConsumeTransmit(uint32_t size) LOCALONLY;
     int Receive(const uint8_t *data, uint32_t size) LOCALONLY;
     void UpdateModem(uint8_t status) LOCALONLY;
     void ReportLineError(uint8_t status) LOCALONLY;
+    void ConfigurationAcknowledged(uint32_t baud, uint32_t source) LOCALONLY;
+    void PublishStatistics() LOCALONLY;
     void Cleanup() LOCALONLY;
 };

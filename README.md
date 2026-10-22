@@ -4,15 +4,17 @@
 
 Native DriverKit driver for WCH CH348 USB to eight UART adapters (`1a86:55d9`). This project targets normal `IOSerialBSDClient` ports usable by existing POSIX serial clients, including H2Loader, without client modifications. It does not create PTYs or modify another application's device enumerator.
 
-**Status: eight native serial ports verified on an Apple Silicon Mac using a development-signed installation.** The connected CH348Q publishes eight real `IOSerialBSDClient` services, `/dev/cu.CH34800100000-0` through `-7`, with matching `/dev/tty.*` nodes. The extension and installer compile for both `arm64` and `x86_64`; Intel runtime, physical UART traffic, hot-plug, sleep, and reboot acceptance remain untested. Protocol and ring-buffer tests pass with AddressSanitizer and UndefinedBehaviorSanitizer. See [current validation](VALIDATION.md).
+**Status: eight native serial ports are verified, with communication smoke-test evidence across UART0–UART7.** The operator tested UART0–UART5 by moving the same working ESP32-S3 board between channels. Independent tests on UART6 and UART7 receive readable ESP-IDF logs and complete concurrent, read-only H2Loader status exchanges at 460800/8N1. The unmodified H6 Batch Loader also connects through the native ports. See [current validation](VALIDATION.md) for the measured results and remaining qualification.
+
+The extension and installer compile for both `arm64` and `x86_64`. Intel runtime, physical loopback, hot-plug, sleep, and reboot acceptance remain untested. Host protocol and ring-buffer tests pass with AddressSanitizer and UndefinedBehaviorSanitizer.
 
 ## Architecture
 
-`CH348Device` matches the exact USB VID/PID, owns the complete device and its single multiplexed USB interface, and creates eight `CH348Port` child services through `IOService::Create`. Each port subclasses `IOUserSerial`, connects the system-provided RX/TX queues, and publishes its own serial service. The CH348 wire protocol belongs to `Protocol/`; the DriverKit classes use the same encoders and decoders tested on the host.
+`CH348Device` matches the exact USB VID/PID, owns the complete device and its single multiplexed USB interface, and creates eight `CH348Port` child services through `IOService::Create`. Each port subclasses `IOUserSerial` and publishes its own serial service. Its `ConnectQueues` and `DisconnectQueues` hooks map and release the actual buffers selected when a client opens or closes the port. Ring indices are monotonic 32-bit counters; only physical buffer offsets are masked. The CH348 wire protocol belongs to `Protocol/`; the DriverKit classes use the same encoders and decoders tested on the host.
 
-The device owns one asynchronous data receive request and one asynchronous status request. Outgoing data is scheduled fairly across active UARTs and advances the serial queue only after both the USB write and the UART-empty status complete. An uncompleted transfer has a three-second deadline. Disconnect aborts I/O and terminates the child services. A newly inserted matching device should be matched by macOS automatically after a successful persistent driver activation; hot-plug behavior remains unverified until that installation is available.
+The device owns one asynchronous data receive request and one asynchronous status request. Outgoing data is scheduled fairly across active UARTs and advances the serial queue only after both the USB write and the UART-empty status complete. An uncompleted transfer has a three-second deadline. Disconnect aborts I/O and terminates the child services. A newly inserted matching device should be matched by macOS automatically after persistent driver activation; physical hot-plug behavior still needs qualification.
 
-Callout names are `/dev/cu.CH348<usb-location>-0` through `-7`, with corresponding `/dev/tty.*` nodes. All eight names were observed on the qualified adapter at USB location `00100000`. Moving the adapter to another USB port can change the location component.
+Callout names are `/dev/cu.CH348<usb-location>-0` through `-7`, with corresponding `/dev/tty.*` nodes. All eight names have been observed at USB locations `00100000` and `20131000`. Moving the adapter to another USB port can change the location component.
 
 ## Requirements
 
@@ -63,7 +65,30 @@ After successful activation, connect one CH348 and run:
 scripts/verify-ports.py
 ```
 
-This queries `IOSerialBSDClient` through IOKit, prints the actual callout paths, and succeeds only when it finds eight CH348 ports. It never opens a UART or sends commands to an attached board. Existing serial applications should then enumerate the same native services; do not use the presence of a USB device or a successful build as proof of serial registration.
+This queries `IOSerialBSDClient` through IOKit, prints the actual callout paths, and succeeds only when it finds eight CH348 ports. `--expected-build 11` also verifies the build actually serving every port; extension registration can finish while a previous driver process is still serving the connected device. `--statistics` includes counters snapshotted at service start and serial close. It never opens a UART or sends commands to an attached board. Existing serial applications should then enumerate the same native services; do not use the presence of a USB device or a successful build as proof of serial registration.
+
+To exercise the native open and custom-baud APIs without transmitting payloads:
+
+```sh
+python3 scripts/serial-probe.py
+```
+
+To receive raw serial data without transmitting payloads, select the actual ports and baud rate:
+
+```sh
+python3 scripts/serial-probe.py --port /dev/cu.CH34820131000-6 \
+    --port /dev/cu.CH34820131000-7 --baud 460800 --read-seconds 8
+```
+
+Selected ports are captured concurrently. The report includes byte counts and a SHA-256 digest; an idle port can legitimately return zero bytes. Add `--output-dir /path/to/private/captures` to retain binary captures for diagnosis. Close other clients first, since applications such as H6 Batch Loader hold exclusive connections. A busy-port result is not a failed UART exchange.
+
+For a physical loopback, disconnect the selected UART from its board and connect **that same channel's TX to RX**. Use the actual path returned by enumeration:
+
+```sh
+python3 scripts/serial-probe.py --port /dev/cu.CH34820131000-0 --loopback
+```
+
+This opt-in test sends 64 KiB of binary data, compares every received byte, rejects missing/extra/corrupt bytes, and reports a SHA-256 digest. It must be used with the loopback fixture, because it deliberately transmits arbitrary binary data. The probe does not issue modem-control ioctls or board commands. An unsuccessful protocol handshake alone cannot distinguish a driver defect from UART configuration or board-side problems; inspect raw serial data and line-status counters as well.
 
 UART settings implement 1200–6000000 baud, 5–8 data bits, one/two stop bits, and none/odd/even parity. Hardware flow control, programmable latency, and mark/space parity currently return `kIOReturnUnsupported`. CH348Q's UART4–UART7 have no DTR/RTS implementation and return unsupported for modem-output programming. Activation/deactivation preserve the modem pins; explicit modem-control requests for supported channels are implemented separately. These behaviors require hardware qualification before relying on them for production use.
 

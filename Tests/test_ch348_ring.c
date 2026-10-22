@@ -8,13 +8,13 @@ int main(void) {
     uint8_t output[8];
     uint32_t producer, count;
     assert(ch348_ring_append(ring, 8, 6, 6, input, 7, &producer) == 0);
-    assert(producer == 5);
+    assert(producer == 13);
     assert(ch348_ring_peek(ring, 8, producer, 6, output, 8, &count) == 0);
     assert(count == 7 && memcmp(input, output, 7) == 0);
     uint8_t before[8]; memcpy(before, ring, 8);
     assert(ch348_ring_append(ring, 8, producer, 6, input, 1, &producer) == 1);
-    assert(producer == 5 && memcmp(before, ring, 8) == 0);
-    assert(ch348_ring_peek(ring, 8, 5, 6, output, 2, &count) == 0 && count == 2);
+    assert(producer == 13 && memcmp(before, ring, 8) == 0);
+    assert(ch348_ring_peek(ring, 8, 13, 6, output, 2, &count) == 0 && count == 2);
     assert(ch348_ring_peek(ring, 7, 0, 0, output, 8, &count) == -1 && count == 0);
     assert(ch348_ring_peek(ring, 8, 8, 0, output, 8, &count) == -1);
     assert(ch348_ring_append(ring, 8, 0, 8, input, 1, &producer) == -1);
@@ -27,5 +27,12 @@ int main(void) {
         assert(count == length && memcmp(input, output, length) == 0);
         consumer = producer;
     }
+    assert(producer > sizeof(ring));
+    // Counters wrap only at UINT32_MAX; physical addressing wraps every ring.
+    consumer = UINT32_MAX - 3u;
+    assert(ch348_ring_append(ring, 8, consumer, consumer, input, 7, &producer) == 0);
+    assert(producer == 3u);
+    assert(ch348_ring_peek(ring, 8, producer, consumer, output, 8, &count) == 0);
+    assert(count == 7 && memcmp(input, output, 7) == 0);
     return 0;
 }

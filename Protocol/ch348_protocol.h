@@ -12,11 +12,14 @@ extern "C" {
 #define CH348_RX_RECORD_SIZE 32u
 #define CH348_RX_DATA_SIZE 30u
 #define CH348_CONFIG_SIZE 12u
+#define CH348_UPLOAD_MODE_SIZE 8u
 
 typedef int (*ch348_receive_fn)(void *user, unsigned port,
                                 const uint8_t *data, size_t size);
 
 /* Original encoders for the published CH348 wire protocol; no vendor code. */
+size_t ch348_encode_upload_mode(uint8_t out[CH348_UPLOAD_MODE_SIZE],
+                                uint8_t chip_version);
 int ch348_encode_config(uint8_t out[CH348_CONFIG_SIZE], unsigned port,
                         uint32_t baud, unsigned data_bits,
                         unsigned stop_bits, unsigned parity);
