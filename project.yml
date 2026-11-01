@@ -7,7 +7,7 @@ settings:
   base:
     DEVELOPMENT_TEAM: SV4P7RNRDK
     CODE_SIGN_STYLE: Automatic
-    CURRENT_PROJECT_VERSION: 11
+    CURRENT_PROJECT_VERSION: 12
     MARKETING_VERSION: 0.1.0
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     CLANG_WARN_DOCUMENTATION_COMMENTS: YES
@@ -22,6 +22,8 @@ targets:
       - path: Driver
         excludes: [Info.plist, Driver.entitlements, Development.entitlements]
       - path: Protocol
+      - path: Resources/CH348.icns
+        buildPhase: resources
     settings:
       base:
         SDKROOT: driverkit
@@ -44,13 +46,16 @@ targets:
   CH348Installer:
     type: application
     platform: macOS
-    sources: [Installer]
+    sources:
+      - path: Installer
+        excludes: [Info.plist, Installer.entitlements]
+      - path: Resources/CH348.icns
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.idy.ch348-macos
         PRODUCT_NAME: CH348
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: CH348 Serial Driver
+        INFOPLIST_FILE: Installer/Info.plist
         CODE_SIGN_ENTITLEMENTS: Installer/Installer.entitlements
         ENABLE_HARDENED_RUNTIME: YES
         SWIFT_VERSION: "5.0"
