@@ -113,6 +113,14 @@ UART settings implement 1200–6000000 baud, 5–8 data bits, one/two stop bits,
 
 The protocol implementation here is original code based on the observable packet format; the project does not vendor the GPL Linux drivers or Apple's SDK source.
 
+## Project website
+
+The project page is at [ch343-macos.idy.dev](https://ch343-macos.idy.dev/). It describes the CH348 driver, current validation, development builds and signing requirements.
+
+GitHub Pages publishes the static `docs/` directory from `main`; no site build tool or JavaScript dependencies are required. `docs/CNAME` records the custom hostname, whose DNS CNAME points to `idy.github.io`. HTTPS is provided by GitHub Pages; enforce HTTPS in the repository's Pages settings after the certificate is issued.
+
+Edit `docs/index.html`, `docs/site.css` and `docs/site.js` to update the page. Keep its supported-device and signing-status descriptions consistent with this README and `VALIDATION.md`.
+
 ## License
 
 [MIT](LICENSE).
