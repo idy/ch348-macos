@@ -24,8 +24,8 @@
         <span>CH348<span class="wordmark-divider">/</span>macOS</span>
       </a>
       <nav aria-label="Main navigation">
-        <a href="#build">Build</a>
-        <a href="https://github.com/idy/ch348-macos/blob/main/README.md">Docs</a>
+        <a href="#download">Downloads</a>
+        <a class="nav-docs" href="https://github.com/idy/ch348-macos/blob/main/README.md">Docs</a>
         <a href="https://github.com/idy/ch348-macos">GitHub <svg aria-hidden="true" viewBox="0 0 16 16" width="13" height="13"><path d="M6 3h7v7M13 3 3 13"/></svg></a>
       </nav>
     </header>
@@ -37,7 +37,7 @@
           <h1 id="hero-title">Eight UARTs.<br>Native ports.</h1>
           <p class="hero-description">A macOS DriverKit driver for WCH CH348 USB adapters. Standard serial devices for the tools you already use.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#download">Get the preview</a>
+            <a class="button button-primary" href="https://github.com/idy/ch348-macos/releases/download/v0.1.0-dev.12-pkg.1/CH348-0.1.0-build12-macos-universal-unsigned.pkg">Download unsigned PKG</a>
             <a class="source-link" href="https://github.com/idy/ch348-macos">Explore the source</a>
           </div>
           <p class="hero-footnote">macOS 14+ <span aria-hidden="true">/</span> Apple Silicon + Intel builds <span aria-hidden="true">/</span> MIT</p>
@@ -106,8 +106,9 @@ python3 scripts/package.py --unsigned</code></pre>
       <section class="download section" id="download" aria-labelledby="download-title">
         <div class="download-copy">
           <p class="download-version">v0.1.0-dev.12-pkg.1</p>
-          <h2 id="download-title">Inspect the latest preview.</h2>
-          <p>The CI-built PKG contains the app and embedded driver for Apple Silicon and Intel. It places <code>CH348.app</code> in <code>/Applications</code>; extension activation is handled by the app.</p>
+          <h2 id="download-title">Download the PKG preview.</h2>
+          <div class="download-file"><code>CH348-0.1.0-build12-macos-universal-unsigned.pkg</code><span>1.4 MB · Apple Silicon + Intel</span></div>
+          <p>The CI-built PKG contains the app and embedded driver. It places <code>CH348.app</code> in <code>/Applications</code>; extension activation is handled by the app. Find the installer under <strong>Assets</strong> in the PKG preview release.</p>
           <p class="download-caveat">Unsigned and not notarized. This preview cannot activate the driver without valid signing.</p>
         </div>
         <div class="download-actions">
