@@ -5,7 +5,9 @@ xcodegen generate
 case "${1:-}" in
     --unsigned)
         exec xcodebuild -project CH348.xcodeproj -scheme CH348 \
-            -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+            -configuration Debug -derivedDataPath build \
+            -destination 'generic/platform=macOS' 'ARCHS=arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build
         ;;
     ""|--development)
         ch348_driver_entitlements=Driver/Driver.entitlements

@@ -33,7 +33,17 @@ scripts/test.sh
 scripts/build.sh --unsigned
 ```
 
-This produces `build/Build/Products/Debug/CH348.app`, containing the native `.dext`. The unsigned build is useful for compilation checks and cannot be treated as an installable driver.
+This produces `build/Build/Products/Debug/CH348.app`, containing the native `.dext`. Both executables are built for `arm64` and `x86_64`. The unsigned build is useful for compilation checks and cannot be treated as an installable driver.
+
+To package this unsigned app:
+
+```sh
+python3 scripts/package.py --unsigned
+```
+
+The script writes `build/packages/CH348-<version>-build<build>-macos-universal-unsigned.pkg` and `SHA256SUMS`. It rejects provisioning profiles and non-universal or certificate-signed bundles, checks that the app and driver versions match, and verifies the package by extracting and comparing its files, symlinks, and permissions. The package installs the app at the fixed path `/Applications/CH348.app`; it has no installation scripts and does not activate the extension.
+
+Every successful CI run uploads the package and checksum as the `CH348-macos-universal-unsigned-pkg` artifact, retained for 14 days. Download it from the **Build and test** run's **Artifacts** section. This is an unsigned development preview: neither the app nor the package has distribution signing or notarization, and the driver cannot be activated without the required valid signatures and provisioning profiles. Signing and notarization credentials are not needed for this CI job.
 
 The app and driver extension share `Resources/CH348.icns`. The icon and its PNG preview are checked in; regenerate them with `swift scripts/generate-icon.swift` after editing the drawing.
 
