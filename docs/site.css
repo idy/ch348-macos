@@ -42,6 +42,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round
 .site-header nav { display: flex; flex-wrap: wrap; align-items: center; gap: 26px; }
 .site-header nav a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--muted); font-size: 14px; text-decoration: none; }
 .site-header nav a:hover { color: var(--accent); }
+.site-header nav .star-repo { min-height: 36px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); white-space: nowrap; }
+.site-header nav .star-repo:hover { background: var(--terminal); color: var(--accent); }
 
 .hero { display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 56px; padding: 72px 0 48px; }
 .hero-copy { min-width: 0; }
@@ -127,11 +129,11 @@ h1 { margin: 0 0 24px; font-size: clamp(42px, 5.2vw, 62px); letter-spacing: -.06
 
 @media (max-width: 720px) {
   .page { padding: 0 24px; }
-  .site-header { min-height: 83px; gap: 15px; }
+  .site-header { min-height: 83px; flex-wrap: wrap; gap: 10px; padding: 16px 0; }
   .wordmark { gap: 7px; font-size: 12px; }
   .wordmark img { width: 30px; height: 30px; }
   .wordmark-divider { padding: 0 5px; }
-  .site-header nav { gap: 14px; }
+  .site-header nav { flex: 1 0 100%; justify-content: space-between; gap: 10px; }
   .site-header nav a { font-size: 12px; }
   .site-header nav .nav-docs { display: none; }
   .hero { grid-template-columns: 1fr; gap: 30px; padding: 42px 0 32px; }
