@@ -20,5 +20,16 @@ jobs:
         run: command -v xcodegen || brew install xcodegen
       - name: Protocol and serial ring tests
         run: scripts/test.sh
-      - name: Build native driver and installer without signing
+      - name: Build universal native driver and installer without signing
         run: scripts/build.sh --unsigned
+      - name: Package and verify unsigned installer
+        run: python3 scripts/package.py --unsigned
+      - name: Upload unsigned PKG and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: CH348-macos-universal-unsigned-pkg
+          path: |
+            build/packages/*-unsigned.pkg
+            build/packages/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
