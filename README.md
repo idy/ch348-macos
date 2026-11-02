@@ -35,6 +35,8 @@ scripts/build.sh --unsigned
 
 This produces `build/Build/Products/Debug/CH348.app`, containing the native `.dext`. The unsigned build is useful for compilation checks and cannot be treated as an installable driver.
 
+The app and driver extension share `Resources/CH348.icns`. The icon and its PNG preview are checked in; regenerate them with `swift scripts/generate-icon.swift` after editing the drawing.
+
 For a local development installation, use Apple's documented development USB entitlement and explicitly opt in:
 
 ```sh
@@ -57,15 +59,15 @@ The installer script first validates the signatures, profile expiration, bundle 
 
 No script changes SIP, boot security, NVRAM, system extension developer mode, or USB device firmware. If normal signing or activation fails, resolve the reported account/profile/approval problem before proceeding.
 
-## Verify eight native ports
+## Verify native ports
 
-After successful activation, connect one CH348 and run:
+After successful activation, connect one or more CH348 adapters and run:
 
 ```sh
 scripts/verify-ports.py
 ```
 
-This queries `IOSerialBSDClient` through IOKit, prints the actual callout paths, and succeeds only when it finds eight CH348 ports. `--expected-build 11` also verifies the build actually serving every port; extension registration can finish while a previous driver process is still serving the connected device. `--statistics` includes counters snapshotted at service start and serial close. It never opens a UART or sends commands to an attached board. Existing serial applications should then enumerate the same native services; do not use the presence of a USB device or a successful build as proof of serial registration.
+This queries `IOSerialBSDClient` through IOKit and groups the actual callout paths by USB location. It succeeds when at least one adapter is found and every detected adapter has exactly channels 0–7; two complete adapters with 16 ports also pass. Missing channels and unexpected CH348 port names fail verification. The JSON report includes each device's channels and any errors. `--expected-build 12` also verifies the build actually serving every port; extension registration can finish while a previous driver process is still serving the connected device. `--statistics` includes counters snapshotted at service start and serial close. It never opens a UART or sends commands to an attached board. Existing serial applications should then enumerate the same native services; do not use the presence of a USB device or a successful build as proof of serial registration.
 
 To exercise the native open and custom-baud APIs without transmitting payloads:
 

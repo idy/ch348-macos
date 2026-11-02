@@ -1,5 +1,15 @@
 # Validation
 
+## 2026-11-02
+
+The icon update is installed as development-signed build `0.1.0/12`. Both `/Applications/CH348.app` and the new system-managed driver extension contain the checked-in `CH348.icns` resource and declare it through `CFBundleIconFile`. Signature validation passed, and `systemextensionsctl list` reports build 12 as `activated enabled` with the display name `CH348 Serial Driver`. The app icon resolves correctly through macOS; the icon in System Settings has not been visually verified.
+
+An activation request using build 11 kept the existing same-version extension, so the project build number was advanced to 12. Immediately after activation, the connected adapter remained served by build 11 while that extension was marked `terminating for upgrade via delegate`; the runtime build check correctly reported the mismatch. After the operator physically disconnected and reconnected the adapter, `verify-ports.py --expected-build 12 --statistics` passed: all eight native ports at USB location `0x02110000` report build 12, the serving process runs from the new system-managed extension, and the old build 11 registration is gone. This verifies one physical reconnect and runtime replacement; UART communication, restart, sleep/wake and multiple adapters were not retested. No UART payload was transmitted during this installation check.
+
+The unmodified H2Loader CLI, built from Firmwares' pinned GizOS revision `d8ff4db46ea8670dafdf5970077f7e36a1b5d20f`, enumerated all eight CH348 channels with `--no-ble scan`. UART7 responded with `board=bk7258_v3_202405`, `target=bk7258`, active role `h2loader`, version `0.7.0`. UART0–UART6 and the other three serial endpoints timed out with `H2_PAL_ERR_TIMEOUT` (`-6`) at the default ten-second probe timeout. The scan exited successfully, but only UART7 completed the status exchange; the timeouts do not establish whether other channels have connected boards. Unique device identifiers and raw scan output remain outside tracked files.
+
+The default Bluetooth-inclusive `scan` aborted with `SIGABRT` before producing results. The macOS crash report identifies TCC enforcement for a missing `NSBluetoothAlwaysUsageDescription` in the CLI. The serial-only scan used the CLI's existing `--no-ble` option; no CLI source or firmware was modified.
+
 ## 2026-10-22
 
 | Check | Result |

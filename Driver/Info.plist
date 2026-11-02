@@ -12,6 +12,10 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>CH348 Serial Driver</string>
+	<key>CFBundleIconFile</key>
+	<string>CH348.icns</string>
 	<key>CFBundlePackageType</key>
 	<string>DEXT</string>
 	<key>CFBundleShortVersionString</key>
