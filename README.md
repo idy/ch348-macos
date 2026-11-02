@@ -2,6 +2,10 @@
 
 [![Build and test](https://github.com/idy/ch348-macos/actions/workflows/ci.yml/badge.svg)](https://github.com/idy/ch348-macos/actions/workflows/ci.yml)
 
+[Download unsigned PKG](https://github.com/idy/ch348-macos/releases/download/v0.1.0-dev.12-pkg.1/CH348-0.1.0-build12-macos-universal-unsigned.pkg) · [PKG preview release](https://github.com/idy/ch348-macos/releases/tag/v0.1.0-dev.12-pkg.1) · [Project website](https://ch343-macos.idy.dev/)
+
+The PKG is attached to the `v0.1.0-dev.12-pkg.1` prerelease. The earlier `v0.1.0-dev.12` preview has ZIP downloads only. These previews are unsigned and are not listed by GitHub's stable `releases/latest` endpoint.
+
 Native DriverKit driver for WCH CH348 USB to eight UART adapters (`1a86:55d9`). This project targets normal `IOSerialBSDClient` ports usable by existing POSIX serial clients, including H2Loader, without client modifications. It does not create PTYs or modify another application's device enumerator.
 
 **Status: eight native serial ports are verified, with communication smoke-test evidence across UART0–UART7.** The operator tested UART0–UART5 by moving the same working ESP32-S3 board between channels. Independent tests on UART6 and UART7 receive readable ESP-IDF logs and complete concurrent, read-only H2Loader status exchanges at 460800/8N1. The unmodified H6 Batch Loader also connects through the native ports. See [current validation](VALIDATION.md) for the measured results and remaining qualification.
@@ -117,7 +121,7 @@ The protocol implementation here is original code based on the observable packet
 
 The project page is at [ch343-macos.idy.dev](https://ch343-macos.idy.dev/). It describes the CH348 driver, current validation, development builds and signing requirements.
 
-GitHub Pages publishes the static `docs/` directory from `main`; no site build tool or JavaScript dependencies are required. `docs/CNAME` records the custom hostname, whose DNS CNAME points to `idy.github.io`. HTTPS is provided by GitHub Pages; enforce HTTPS in the repository's Pages settings after the certificate is issued.
+GitHub Pages publishes the static `docs/` directory from `main`; no site build tool or JavaScript dependencies are required. `docs/CNAME` records the custom hostname, whose DNS CNAME points to `idy.github.io`. GitHub Pages manages its TLS certificate and enforces HTTPS for this hostname.
 
 Edit `docs/index.html`, `docs/site.css` and `docs/site.js` to update the page. Keep its supported-device and signing-status descriptions consistent with this README and `VALIDATION.md`.
 

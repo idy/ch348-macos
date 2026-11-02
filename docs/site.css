@@ -98,6 +98,9 @@ h1 { margin: 0 0 24px; font-size: clamp(42px, 5.2vw, 62px); letter-spacing: -.06
 .download { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 42px; margin: 44px 0 0; padding: 30px 32px; border: 0; border-radius: 12px; background: var(--terminal); }
 .download-version { margin: 0 0 9px; color: var(--accent); font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
 .download h2 { margin-bottom: 12px; font-size: 22px; }
+.download-file { min-width: 0; margin: 0 0 14px; }
+.download-file code { display: block; font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.download-file span { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .download-copy > p:not(.download-version) { max-width: 65ch; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
 .download-copy > p.download-caveat { margin-top: 12px; color: var(--preview); }
 .download-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
@@ -130,7 +133,7 @@ h1 { margin: 0 0 24px; font-size: clamp(42px, 5.2vw, 62px); letter-spacing: -.06
   .wordmark-divider { padding: 0 5px; }
   .site-header nav { gap: 14px; }
   .site-header nav a { font-size: 12px; }
-  .site-header nav a:first-child { display: none; }
+  .site-header nav .nav-docs { display: none; }
   .hero { grid-template-columns: 1fr; gap: 30px; padding: 42px 0 32px; }
   .release-state { margin-bottom: 18px; }
   h1 { font-size: clamp(36px, 8.5vw, 54px); }
