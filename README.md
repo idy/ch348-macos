@@ -2,9 +2,9 @@
 
 [![Build and test](https://github.com/idy/ch348-macos/actions/workflows/ci.yml/badge.svg)](https://github.com/idy/ch348-macos/actions/workflows/ci.yml)
 
-[Download unsigned PKG](https://github.com/idy/ch348-macos/releases/download/v0.1.0-dev.12-pkg.1/CH348-0.1.0-build12-macos-universal-unsigned.pkg) · [PKG preview release](https://github.com/idy/ch348-macos/releases/tag/v0.1.0-dev.12-pkg.1) · [Project website](https://ch343-macos.idy.dev/)
+[Download unsigned PKG](https://github.com/idy/ch348-macos/releases/download/v0.1.1-dev.13-pkg.1/CH348-0.1.1-build13-macos-universal-unsigned.pkg) · [PKG preview release](https://github.com/idy/ch348-macos/releases/tag/v0.1.1-dev.13-pkg.1) · [Project website](https://ch343-macos.idy.dev/)
 
-The PKG is attached to the `v0.1.0-dev.12-pkg.1` prerelease. The earlier `v0.1.0-dev.12` preview has ZIP downloads only. These previews are unsigned and are not listed by GitHub's stable `releases/latest` endpoint.
+The PKG is attached to the `v0.1.1-dev.13-pkg.1` prerelease. The earlier `v0.1.0-dev.12` preview has ZIP downloads only. These previews are unsigned and are not listed by GitHub's stable `releases/latest` endpoint.
 
 Native DriverKit driver for WCH CH348 USB to eight UART adapters (`1a86:55d9`). This project targets normal `IOSerialBSDClient` ports usable by existing POSIX serial clients, including H2Loader, without client modifications. It does not create PTYs or modify another application's device enumerator.
 
@@ -123,7 +123,15 @@ The project page is at [ch343-macos.idy.dev](https://ch343-macos.idy.dev/). It d
 
 GitHub Pages publishes the static `docs/` directory from `main`; no site build tool or JavaScript dependencies are required. `docs/CNAME` records the custom hostname, whose DNS CNAME points to `idy.github.io`. GitHub Pages manages its TLS certificate and enforces HTTPS for this hostname.
 
-Edit `docs/index.html`, `docs/site.css` and `docs/site.js` to update the page. Keep its supported-device and signing-status descriptions consistent with this README and `VALIDATION.md`.
+On each page load, `docs/site.js` requests the public GitHub Releases list and selects the most recently published release among the latest 100 entries that has both an uploaded universal PKG and `SHA256SUMS`. Prereleases are included; drafts, incomplete uploads, and source-only releases are skipped. Both download buttons, the displayed version, filename, size, release notes, and checksum link update together. If the request fails, is rate-limited, or takes longer than five seconds, the versioned links in the HTML remain usable. No API token is sent to the browser.
+
+Edit `docs/index.html`, `docs/site.css` and `docs/site.js` to update the page. Keep the HTML fallback on a known published package and its supported-device and signing-status descriptions consistent with this README and `VALIDATION.md`. Hardware validation labels describe the tested build rather than automatically claiming that the latest download has been hardware-qualified.
+
+Run the website's dependency-free JavaScript regression tests with Node.js 18 or later:
+
+```bash
+node --test Tests/test_site.js
+```
 
 ## Pull request review
 
