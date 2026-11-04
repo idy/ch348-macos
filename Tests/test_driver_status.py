@@ -20,6 +20,7 @@ HOST_STUBS = r'''
 #include <utility>
 #include <vector>
 using IOReturn = int;
+using kern_return_t = int;
 constexpr int kIOReturnSuccess = 0, kIOReturnBadArgument = -1;
 enum { StatusIn };
 struct Pipe {
@@ -53,11 +54,19 @@ struct CH348Device_IVars {
     Pipe *pipes[1] = {};
     void *buffers[1] = {}, *actions[2] = {};
     bool stopping = false, tx_busy = true, tx_uart_done = false;
+    bool tx_discard = false, active[CH348_PORT_COUNT] = {};
     unsigned tx_port = 2;
 };
 struct CH348Device {
     CH348Device_IVars *ivars = nullptr;
     unsigned failures = 0, finished = 0;
+    std::vector<std::vector<uint8_t>> commands;
+    kern_return_t SetPortActive(uint32_t, bool);
+    int WriteRegister(uint32_t, uint8_t, uint8_t, bool) { return kIOReturnSuccess; }
+    int Command(const uint8_t *data, uint32_t size) {
+        commands.emplace_back(data, data + size);
+        return kIOReturnSuccess;
+    }
     void HandleStatus(uint32_t, uint8_t, const uint8_t *);
     void StatusComplete(void *, IOReturn, uint32_t, uint64_t);
     void Fail(int) { ++failures; ivars->stopping = true; }
@@ -108,7 +117,25 @@ int main(int argc, char **argv) {
     assert(argc == 2);
     const std::string scenario = argv[1];
     Fixture f;
-    if (scenario == "delta") {
+    if (scenario == "query-roundtrip") {
+        const uint8_t addresses[] = {6, 0x16, 0x26, 0x36, 0x0e, 0x1e, 0x2e, 0x3e};
+        for (uint8_t port = 0; port < CH348_PORT_COUNT; ++port) {
+            Fixture current;
+            current.state.tx_busy = false;
+            assert(current.device.SetPortActive(port, true) == kIOReturnSuccess);
+            assert(current.state.active[port] && current.device.commands.size() == 1);
+            const auto &query = current.device.commands.front();
+            assert(query.size() == 3 && query[0] == (0x90 | port));
+            assert(query[1] == 0x85 && query[2] == addresses[port]);
+            const uint8_t pins = uint8_t((port + 1) << 4);
+            // Echo the actual request's source tag and register, not a fabricated port.
+            current.send({query[0], query[1], query[2], pins});
+            for (unsigned target = 0; target < CH348_PORT_COUNT; ++target)
+                current.modem(target, target == port ? pins : 0, target == port ? 1 : 0);
+            assert(current.events() == 1 && current.pipe.rearms == 1);
+            assert(!current.device.failures && !current.device.finished);
+        }
+    } else if (scenario == "delta") {
         f.send({0, 0, 0x11}); f.modem(0, 0x10, 1);
         f.send({0, 0, 0x22}); f.modem(0, 0x30, 2);
         assert(f.events() == 2 && f.pipe.rearms == 2 && !f.device.failures);
@@ -169,7 +196,8 @@ class DriverStatusTests(unittest.TestCase):
         definitions = [extract_definition(ROOT / "Driver/CH348Port.cpp",
                                           "void CH348Port::UpdateModem(")]
         definitions.extend(extract_definition(ROOT / "Driver/CH348Device.cpp", signature)
-                           for signature in ("void CH348Device::HandleStatus(",
+                           for signature in ("kern_return_t CH348Device::SetPortActive(",
+                                             "void CH348Device::HandleStatus(",
                                              "static void status_record(",
                                              "void IMPL(CH348Device, StatusComplete)"))
         flags = ["-Wall", "-Wextra", "-Werror", *SANITIZERS, "-I" + str(ROOT / "Protocol")]
@@ -192,6 +220,7 @@ class DriverStatusTests(unittest.TestCase):
                                 capture_output=True, cwd=ROOT, timeout=10)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_activation_query_roundtrips_to_each_uart(self): self.run_scenario("query-roundtrip")
     def test_modem_notifications_preserve_unchanged_cts(self): self.run_scenario("delta")
     def test_delta_masks_clear_selected_and_ignore_unselected_bits(self): self.run_scenario("mask")
     def test_read_snapshots_require_matching_port_address(self): self.run_scenario("snapshot")

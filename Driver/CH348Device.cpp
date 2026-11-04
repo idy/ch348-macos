@@ -296,7 +296,7 @@ kern_return_t CH348Device::SetPortActive(uint32_t port, bool active) {
     // previously enabled it. This bit write also preserves DTR/RTS.
     if (active && result == kIOReturnSuccess) result = WriteRegister(port, 4, 0x50, true);
     if (active && result == kIOReturnSuccess) {
-        const uint8_t query[] = {0x90, 0x85, ch348_register(port, 6)};
+        const uint8_t query[] = {uint8_t(0x90 | port), 0x85, ch348_register(port, 6)};
         result = Command(query, sizeof(query));
     }
     if (result == kIOReturnSuccess) ivars->active[port] = active;
