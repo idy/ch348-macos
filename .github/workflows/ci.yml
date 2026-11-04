@@ -18,6 +18,8 @@ jobs:
           persist-credentials: false
       - name: Install XcodeGen
         run: command -v xcodegen || brew install xcodegen
+      - name: Website release link tests
+        run: node --test Tests/test_site.js
       - name: Protocol and serial ring tests
         run: scripts/test.sh
       - name: Build universal native driver and installer without signing
