@@ -8,7 +8,7 @@ The pre-fix receive harness reproduced 18 failures across the overflow subcases:
 
 An activation-query regression captures the query emitted by the production activation method for each of the eight UARTs. It checks the target source tag and register address, then constructs the simulated readback from that actual request and verifies that only the intended port receives the modem snapshot. This covers request routing in addition to the independent response-parser tests.
 
-`scripts/test.sh` passes all 44 Python tests and both C test executables. Protocol tests include in-place transmit payloads, mixed-length status records, truncation boundaries, and modem-bit merge combinations. A separate deterministic 100,000-input protocol stress check passed under both sanitizers. The unsigned installer and extension build successfully for both `arm64` and `x86_64`.
+`scripts/test.sh` passes all 44 Python tests and both C test executables. Protocol tests include in-place transmit payloads, mixed-length status records, truncation boundaries, and modem-bit merge combinations. A separate deterministic 100,000-input protocol stress check passed under both sanitizers. The unsigned `0.1.1` / build `13` installer and extension build successfully for both `arm64` and `x86_64`.
 
 No driver was installed or activated during these checks, and no serial port was opened or UART payload transmitted. Physical overflow, continuous multi-port traffic, modem-pin behavior, USB fault recovery, and sleep/wake remain unqualified for this revision. The watchdog's clock accounting excludes system sleep; that change alone does not establish complete suspend/resume support.
 
