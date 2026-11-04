@@ -64,6 +64,31 @@ static void test_transmit(void) {
   assert(ch348_encode_transmit(output, sizeof(output), 8u, input, 1u) == 0u);
 }
 
+static void test_transmit_in_place(void) {
+  const size_t sizes[] = {1u, 128u, 509u};
+  for (unsigned port = 0; port < CH348_PORT_COUNT; ++port) {
+    for (size_t test = 0; test < sizeof(sizes) / sizeof(sizes[0]); ++test) {
+      uint8_t guarded[514];
+      uint8_t expected[509];
+      memset(guarded, 0xa5, sizeof(guarded));
+      uint8_t *out = guarded + 1;
+      const size_t count = sizes[test];
+      for (size_t i = 0; i < count; ++i) expected[i] = (uint8_t)(i + port);
+      memcpy(out + 3, expected, count);
+      assert(ch348_encode_transmit(out, 512, port, out + 3, count) == count + 3);
+      assert(out[0] == port && out[1] == (uint8_t)count && out[2] == count >> 8);
+      assert(memcmp(out + 3, expected, count) == 0);
+      assert(guarded[0] == 0xa5 && guarded[513] == 0xa5);
+      uint8_t before[514];
+      memcpy(before, guarded, sizeof(before));
+      assert(ch348_encode_transmit(out, count + 2, port, out + 3, count) == 0);
+      assert(ch348_encode_transmit(out, 512, 8, out + 3, count) == 0);
+      assert(ch348_encode_transmit(out, 512, port, out + 3, 0) == 0);
+      assert(memcmp(before, guarded, sizeof(before)) == 0);
+    }
+  }
+}
+
 static void test_receive(void) {
   uint8_t input[CH348_PORT_COUNT * CH348_RX_RECORD_SIZE] = {0};
   received_t received = {0};
@@ -99,19 +124,90 @@ static void test_status(void) {
     input[12u + port * 3u + 1u] = 0x02u;
   }
   uint8_t mask = 0u;
-  assert(ch348_decode_status(input, sizeof(input), &mask) == 0);
+  assert(ch348_decode_status(input, sizeof(input), &mask, NULL, NULL) == 0);
   assert(mask == 0xffu);
-  assert(ch348_decode_status(input, sizeof(input) - 1u, &mask) != 0);
+  assert(ch348_decode_status(input, sizeof(input) - 1u, &mask, NULL, NULL) != 0);
   assert(mask == 0u);
   input[12u] = 8u;
-  assert(ch348_decode_status(input, sizeof(input), &mask) != 0);
+  assert(ch348_decode_status(input, sizeof(input), &mask, NULL, NULL) != 0);
   assert(mask == 0u);
+}
+
+typedef struct status_capture {
+  size_t calls;
+  unsigned ports[16];
+  uint8_t regs[16];
+  size_t sizes[16];
+} status_capture_t;
+
+static void capture_status(void *user, unsigned port, uint8_t reg,
+                            const uint8_t *record, size_t size) {
+  status_capture_t *capture = user;
+  assert(capture->calls < 16 && port < CH348_PORT_COUNT);
+  assert(record[1] == reg);
+  const size_t index = capture->calls++;
+  capture->ports[index] = port;
+  capture->regs[index] = reg;
+  capture->sizes[index] = size;
+}
+
+static void test_status_records(void) {
+  const uint8_t types[] = {0x00, 0x10, 0x02, 0x06, 0x85, 0x97, 0x9d, 0xa1, 0xa3, 0xa7};
+  const size_t lengths[] = {3, 3, 3, 3, 4, 4, 4, 12, 3, 10};
+  uint8_t input[64] = {0};
+  size_t offsets[sizeof(types)], size = 0;
+  for (size_t i = 0; i < sizeof(types); ++i) {
+    offsets[i] = size;
+    input[size] = (uint8_t)(i % CH348_PORT_COUNT);
+    input[size + 1] = types[i];
+    size += lengths[i];
+  }
+  status_capture_t capture = {0};
+  uint8_t mask = 0;
+  assert(ch348_decode_status(input, size, &mask, capture_status, &capture) == 0);
+  assert(capture.calls == sizeof(types) && mask == (1u << 2));
+  for (size_t i = 0; i < sizeof(types); ++i) {
+    assert(capture.ports[i] == i % CH348_PORT_COUNT);
+    assert(capture.regs[i] == types[i] && capture.sizes[i] == lengths[i]);
+    for (size_t partial = 1; partial < lengths[i]; ++partial) {
+      capture.calls = 0;
+      mask = 0xff;
+      assert(ch348_decode_status(input, offsets[i] + partial, &mask,
+                                 capture_status, &capture) != 0);
+      assert(capture.calls == 0 && mask == 0);
+    }
+  }
+  input[offsets[sizeof(types) - 1]] = 8;
+  capture.calls = 0;
+  assert(ch348_decode_status(input, size, &mask, capture_status, &capture) != 0);
+  assert(capture.calls == 0 && mask == 0);
+}
+
+static void test_modem_delta(void) {
+  assert(ch348_merge_modem(0, 0x11) == 0x10);
+  assert(ch348_merge_modem(0x10, 0x22) == 0x30);
+  assert(ch348_merge_modem(0x30, 0x01) == 0x20);
+  assert(ch348_merge_modem(0xf0, 0) == 0xf0);
+  assert(ch348_merge_modem(0xf0, 0x0f) == 0);
+  for (unsigned old = 0; old < 16; ++old) {
+    for (unsigned status = 0; status < 256; ++status) {
+      const uint8_t actual = ch348_merge_modem((uint8_t)(old << 4), (uint8_t)status);
+      for (unsigned bit = 0; bit < 4; ++bit) {
+        const unsigned expected = (status & (1u << bit))
+            ? ((status >> (bit + 4)) & 1u) : ((old >> bit) & 1u);
+        assert(((actual >> (bit + 4)) & 1u) == expected);
+      }
+    }
+  }
 }
 
 int main(void) {
   test_configuration();
   test_transmit();
+  test_transmit_in_place();
   test_receive();
   test_status();
+  test_status_records();
+  test_modem_delta();
   return 0;
 }

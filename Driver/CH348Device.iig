@@ -35,5 +35,6 @@ public:
     void Fail(kern_return_t error) LOCALONLY;
     kern_return_t Command(const uint8_t *data, uint32_t length) LOCALONLY;
     int Deliver(uint32_t port, const uint8_t *data, uint32_t length) LOCALONLY;
+    void HandleStatus(uint32_t port, uint8_t reg, const uint8_t *record) LOCALONLY;
     void Cleanup() LOCALONLY;
 };
