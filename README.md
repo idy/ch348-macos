@@ -125,6 +125,12 @@ GitHub Pages publishes the static `docs/` directory from `main`; no site build t
 
 Edit `docs/index.html`, `docs/site.css` and `docs/site.js` to update the page. Keep its supported-device and signing-status descriptions consistent with this README and `VALIDATION.md`.
 
+## Pull request review
+
+The `OpenAI PR review` workflow automatically reviews open, non-draft pull requests and new commits through [GizClaw's shared reviewer](https://github.com/GizClaw/github-workflows), using its `latest` tag and this repository's `OPENAI_API_KEY` Actions secret. To request another review, add a new PR comment containing `@codex review` on its own line.
+
+Results appear in the `OpenAI PR Review`, `OpenAI Issue Review`, and `OpenAI Code Review` checks. Closing Issues are optional. The reviewer reads the complete diff against the trusted base without checking out or executing PR-head code. Automated review does not replace hardware validation or human approval.
+
 ## License
 
 [MIT](LICENSE).
