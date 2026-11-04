@@ -41,7 +41,7 @@ size_t ch348_encode_transmit(uint8_t *out, size_t capacity, unsigned port,
   out[0] = (uint8_t)port;
   out[1] = (uint8_t)size;
   out[2] = (uint8_t)(size >> 8u);
-  memcpy(out + 3u, data, size);
+  if (data != out + 3u) memcpy(out + 3u, data, size);
   return size + 3u;
 }
 
@@ -67,36 +67,40 @@ int ch348_decode_receive(const uint8_t *data, size_t size,
   return 0;
 }
 
+static size_t status_record_size(uint8_t reg) {
+  if (reg == 0xa1u) return 12u;
+  if (reg == 0x85u || (reg >= 0x97u && reg <= 0x9du)) return 4u;
+  if (reg == 0xa7u) return 10u;
+  return 3u;
+}
+
 int ch348_decode_status(const uint8_t *data, size_t size,
-                        uint8_t *out_empty_ports) {
+                        uint8_t *out_empty_ports,
+                        ch348_status_fn receive, void *user) {
   uint8_t empty_ports = 0u;
-  if (data == NULL || out_empty_ports == NULL) {
-    return -1;
-  }
+  if (data == NULL || out_empty_ports == NULL) return -1;
   *out_empty_ports = 0u;
   for (size_t offset = 0u; offset < size;) {
-    if (size - offset < 3u || (data[offset] & 0x0fu) >= CH348_PORT_COUNT) {
-      return -1;
-    }
+    if (size - offset < 3u || (data[offset] & 0x0fu) >= CH348_PORT_COUNT) return -1;
+    const size_t count = status_record_size(data[offset + 1u]);
+    if (count > size - offset) return -1;
+    offset += count;
+  }
+  for (size_t offset = 0u; offset < size;) {
     const unsigned port = data[offset] & 0x0fu;
     const uint8_t reg = data[offset + 1u];
-    size_t count = 3u;
-    if (reg == 0xa1u) {
-      count = 12u;
-    } else if (reg >= 0x97u && reg <= 0x9du) {
-      count = 4u;
-    } else if (reg >= 0xa3u && reg <= 0xa7u) {
-      count = reg == 0xa7u ? 10u : 3u;
-    } else if ((reg & 0x0fu) == 0x02u) {
-      empty_ports |= (uint8_t)(1u << port);
-    }
-    if (count > size - offset) {
-      return -1;
-    }
+    const size_t count = status_record_size(reg);
+    if ((reg & 0x0fu) == 0x02u) empty_ports |= (uint8_t)(1u << port);
+    if (receive != NULL) receive(user, port, reg, data + offset, count);
     offset += count;
   }
   *out_empty_ports = empty_ports;
   return 0;
+}
+
+uint8_t ch348_merge_modem(uint8_t previous, uint8_t status) {
+  const uint8_t mask = (uint8_t)((status & 0x0fu) << 4u);
+  return (uint8_t)((previous & (uint8_t)~mask) | (status & mask));
 }
 
 uint8_t ch348_register(unsigned port, uint8_t reg) {

@@ -11,6 +11,8 @@
 #include <USBDriverKit/IOUSBHostDevice.h>
 #include <USBDriverKit/IOUSBHostInterface.h>
 #include <USBDriverKit/USBDriverKitDefs.h>
+#include <USBDriverKit/AppleUSBDescriptorParsing.h>
+#include <USBDriverKit/IOUSBHostFamilyDefinitions.h>
 #include <SerialDriverKit/SerialDriverKit.h>
 #include <time.h>
 #include <stdio.h>
@@ -26,7 +28,6 @@ struct CH348Device_IVars {
     OSAction *timeout_action;
     CH348Port *ports[8];
     bool active[8];
-    uint32_t baud[8];
     uint32_t location;
     uint32_t max_transmit;
     uint32_t tx_port;
@@ -103,40 +104,34 @@ kern_return_t IMPL(CH348Device, Start) {
     const auto interface = configuration ? ivars->interface->GetInterfaceDescriptor(configuration) : nullptr;
     if (configuration == nullptr || interface == nullptr || interface->bNumEndpoints != 4 ||
         interface->bInterfaceNumber != 0 || interface->bAlternateSetting != 0) {
-        if (configuration) IOFree(const_cast<IOUSBConfigurationDescriptor *>(configuration), configuration->wTotalLength);
+        if (configuration) IOUSBHostFreeDescriptor(configuration);
         Cleanup(); return kIOReturnUnsupported;
     }
     unsigned inputs = 0, outputs = 0, endpoints = 0;
-    const auto end = reinterpret_cast<const uint8_t *>(configuration) + configuration->wTotalLength;
-    auto cursor = reinterpret_cast<const uint8_t *>(interface) + interface->bLength;
+    const IOUSBDescriptorHeader *previous = nullptr;
     result = kIOReturnSuccess;
-    while (cursor + 2 <= end && endpoints < 4) {
-        const uint8_t length = cursor[0];
-        if (length < 2 || size_t(end - cursor) < length || cursor[1] == 4) {
+    while (endpoints < 4) {
+        const auto endpoint = IOUSBGetNextEndpointDescriptor(configuration, interface, previous);
+        if (endpoint == nullptr) break;
+        if (endpoint->bLength < sizeof(IOUSBEndpointDescriptor) ||
+            (endpoint->bmAttributes & 3) != 2 || endpoint->wMaxPacketSize < 32) {
             result = kIOReturnUnsupported; break;
         }
-        if (cursor[1] == 5) {
-            if (length < sizeof(IOUSBEndpointDescriptor)) { result = kIOReturnUnsupported; break; }
-            const auto endpoint = reinterpret_cast<const IOUSBEndpointDescriptor *>(cursor);
-            if ((endpoint->bmAttributes & 3) != 2 || endpoint->wMaxPacketSize < 32) {
-                result = kIOReturnUnsupported; break;
-            }
-            unsigned slot;
-            if ((endpoint->bEndpointAddress & 0x80) != 0) {
-                if (inputs >= 2) { result = kIOReturnUnsupported; break; }
-                slot = inputs++ == 0 ? DataIn : StatusIn;
-            } else {
-                if (outputs >= 2) { result = kIOReturnUnsupported; break; }
-                slot = outputs++ == 0 ? DataOut : ConfigOut;
-            }
-            result = ivars->interface->CopyPipe(endpoint->bEndpointAddress, &ivars->pipes[slot]);
-            if (result != kIOReturnSuccess) break;
-            if (slot == DataOut) ivars->max_transmit = endpoint->wMaxPacketSize - 3;
-            ++endpoints;
+        previous = reinterpret_cast<const IOUSBDescriptorHeader *>(endpoint);
+        unsigned slot;
+        if ((endpoint->bEndpointAddress & 0x80) != 0) {
+            if (inputs >= 2) { result = kIOReturnUnsupported; break; }
+            slot = inputs++ == 0 ? DataIn : StatusIn;
+        } else {
+            if (outputs >= 2) { result = kIOReturnUnsupported; break; }
+            slot = outputs++ == 0 ? DataOut : ConfigOut;
         }
-        cursor += length;
+        result = ivars->interface->CopyPipe(endpoint->bEndpointAddress, &ivars->pipes[slot]);
+        if (result != kIOReturnSuccess) break;
+        if (slot == DataOut) ivars->max_transmit = endpoint->wMaxPacketSize - 3;
+        ++endpoints;
     }
-    IOFree(const_cast<IOUSBConfigurationDescriptor *>(configuration), configuration->wTotalLength);
+    IOUSBHostFreeDescriptor(configuration);
     if (result != kIOReturnSuccess || endpoints != 4 || inputs != 2 || outputs != 2) {
         Cleanup(); return kIOReturnUnsupported;
     }
@@ -190,7 +185,6 @@ kern_return_t IMPL(CH348Device, Start) {
         if (!port->IsStarted()) result = port->Start(this);
         os_log(OS_LOG_DEFAULT, "CH348: start UART%u returned 0x%x", index, result);
         if (result != kIOReturnSuccess) { Cleanup(); return result; }
-        ivars->baud[index] = 115200;
     }
     result = ivars->pipes[DataIn]->AsyncIO(ivars->buffers[DataIn], 512, ivars->actions[0], 0);
     if (result == kIOReturnSuccess)
@@ -198,6 +192,7 @@ kern_return_t IMPL(CH348Device, Start) {
     if (result != kIOReturnSuccess) { Cleanup(); return result; }
     result = RegisterService();
     os_log(OS_LOG_DEFAULT, "CH348: eight UART services ready, registration 0x%x", result);
+    if (result != kIOReturnSuccess) Cleanup();
     return result;
 }
 
@@ -248,7 +243,15 @@ kern_return_t CH348Device::Command(const uint8_t *data, uint32_t length) {
     memcpy(reinterpret_cast<void *>(ivars->addresses[ConfigOut].address), data, length);
     uint32_t written = 0;
     const auto result = ivars->pipes[ConfigOut]->IO(ivars->buffers[ConfigOut], length, &written, 1000);
-    if (result != kIOReturnSuccess) return result;
+    if (result != kIOReturnSuccess) {
+        if (result == kUSBHostReturnPipeStalled || result == kIOReturnIOError ||
+            result == kIOReturnOverrun || result == kIOReturnUnderrun) {
+            const auto recovery = ivars->pipes[ConfigOut]->ClearStall(true);
+            if (recovery != kIOReturnSuccess) Fail(recovery);
+        }
+        // The command may already have taken effect; never replay it automatically.
+        return result;
+    }
     return written == length ? kIOReturnSuccess : kIOReturnUnderrun;
 }
 
@@ -269,9 +272,7 @@ kern_return_t CH348Device::ConfigurePort(uint32_t port, uint32_t baud,
     uint8_t command[CH348_CONFIG_SIZE];
     if (ch348_encode_config(command, port, baud, bits, halfStops / 2, parity - 1) != 0)
         return kIOReturnBadArgument;
-    const auto result = Command(command, sizeof(command));
-    if (result == kIOReturnSuccess) ivars->baud[port] = baud;
-    return result;
+    return Command(command, sizeof(command));
 }
 
 kern_return_t CH348Device::SetPortActive(uint32_t port, bool active) {
@@ -294,6 +295,10 @@ kern_return_t CH348Device::SetPortActive(uint32_t port, bool active) {
     // Start without hardware flow control, including when another OS or client
     // previously enabled it. This bit write also preserves DTR/RTS.
     if (active && result == kIOReturnSuccess) result = WriteRegister(port, 4, 0x50, true);
+    if (active && result == kIOReturnSuccess) {
+        const uint8_t query[] = {0x90, 0x85, ch348_register(port, 6)};
+        result = Command(query, sizeof(query));
+    }
     if (result == kIOReturnSuccess) ivars->active[port] = active;
     return result;
 }
@@ -317,29 +322,38 @@ void IMPL(CH348Device, ReceiveComplete) {
     if (result != kIOReturnSuccess) Fail(result);
 }
 
+void CH348Device::HandleStatus(uint32_t port, uint8_t reg, const uint8_t *record) {
+    if (reg == 0xa1) {
+        const uint8_t target = record[2] & 0x0f;
+        const uint32_t baud = (uint32_t(record[3]) << 24) |
+            (uint32_t(record[4]) << 16) | (uint32_t(record[5]) << 8) | record[6];
+        if (target < 8) ivars->ports[target]->ConfigurationAcknowledged(baud, port);
+        return;
+    }
+    if (reg == 0x85) {
+        if (record[2] == ch348_register(port, 6))
+            ivars->ports[port]->UpdateModem(record[3] | 0x0f);
+        return;
+    }
+    if ((reg >= 0x97 && reg <= 0x9d) || (reg >= 0xa3 && reg <= 0xa7)) return;
+    if ((reg & 0x0f) == 0) ivars->ports[port]->UpdateModem(record[2]);
+    if ((reg & 0x0f) == 6) ivars->ports[port]->ReportLineError(record[2]);
+}
+
+static void status_record(void *context, unsigned port, uint8_t reg,
+                           const uint8_t *record, size_t length) {
+    (void)length;
+    static_cast<CH348Device *>(context)->HandleStatus(port, reg, record);
+}
+
 void IMPL(CH348Device, StatusComplete) {
     (void)action; (void)completionTimestamp;
     if (ivars->stopping) return;
     if (status != kIOReturnSuccess || actualByteCount > 512) { Fail(status); return; }
     const auto bytes = reinterpret_cast<const uint8_t *>(ivars->addresses[StatusIn].address);
     uint8_t empty = 0;
-    if (ch348_decode_status(bytes, actualByteCount, &empty) != 0) { Fail(kIOReturnBadArgument); return; }
-    for (uint32_t offset = 0; offset < actualByteCount;) {
-        const uint8_t port = bytes[offset] & 0x0f;
-        const uint8_t reg = bytes[offset + 1];
-        if (reg == 0xa1) {
-            const uint8_t target = bytes[offset + 2] & 0x0f;
-            const uint32_t baud = (uint32_t(bytes[offset + 3]) << 24) |
-                (uint32_t(bytes[offset + 4]) << 16) |
-                (uint32_t(bytes[offset + 5]) << 8) | bytes[offset + 6];
-            if (target < 8) ivars->ports[target]->ConfigurationAcknowledged(baud, port);
-            offset += 12; continue;
-        }
-        if (reg >= 0x97 && reg <= 0x9d) { offset += 4; continue; }
-        if (reg >= 0xa3 && reg <= 0xa7) { offset += reg == 0xa7 ? 10 : 3; continue; }
-        if (reg != 0 && (reg & 0x0f) == 0) ivars->ports[port]->UpdateModem(bytes[offset + 2]);
-        if ((reg & 0x0f) == 6) ivars->ports[port]->ReportLineError(bytes[offset + 2]);
-        offset += 3;
+    if (ch348_decode_status(bytes, actualByteCount, &empty, status_record, this) != 0) {
+        Fail(kIOReturnBadArgument); return;
     }
     if (ivars->tx_busy && (empty & (1u << ivars->tx_port)) != 0) {
         ivars->tx_uart_done = true;
@@ -355,18 +369,15 @@ void CH348Device::PumpTransmit() {
     for (unsigned offset = 0; offset < 8; ++offset) {
         const unsigned port = (ivars->next_port + offset) % 8;
         if (!ivars->active[port] || ivars->ports[port] == nullptr) continue;
-        const uint32_t capacity = ivars->baud[port] < 9600 && ivars->max_transmit > 128
-            ? 128 : ivars->max_transmit;
-        uint8_t payload[509];
-        const uint32_t size = ivars->ports[port]->CopyTransmit(payload, capacity);
+        const uint32_t size = ivars->ports[port]->CopyTransmit(buffer + 3, ivars->max_transmit);
         if (size == 0 || ivars->stopping) continue;
-        const auto count = ch348_encode_transmit(buffer, 512, port, payload, size);
+        const auto count = ch348_encode_transmit(buffer, 512, port, buffer + 3, size);
         if (count == 0) { Fail(kIOReturnBadArgument); return; }
         ivars->tx_busy = true; ivars->tx_usb_done = false; ivars->tx_uart_done = false;
         ivars->tx_discard = false;
         ivars->tx_port = port; ivars->tx_size = size; ivars->next_port = (port + 1) % 8;
-        ivars->tx_deadline = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) + 3000000000ull;
-        auto result = ivars->timer->WakeAtTime(kIOTimerClockMonotonicRaw, ivars->tx_deadline, 0);
+        ivars->tx_deadline = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + 3000000000ull;
+        auto result = ivars->timer->WakeAtTime(kIOTimerClockUptimeRaw, ivars->tx_deadline, 0);
         if (result == kIOReturnSuccess)
             result = ivars->pipes[DataOut]->AsyncIO(ivars->buffers[DataOut], uint32_t(count), ivars->actions[2], 1000);
         if (result != kIOReturnSuccess) Fail(result);
@@ -396,6 +407,6 @@ void CH348Device::FinishTransmit() {
 
 void IMPL(CH348Device, TransmitTimeout) {
     (void)action; (void)time;
-    if (ivars->tx_busy && clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) >= ivars->tx_deadline)
+    if (ivars->tx_busy && clock_gettime_nsec_np(CLOCK_UPTIME_RAW) >= ivars->tx_deadline)
         Fail(kIOReturnTimeout);
 }

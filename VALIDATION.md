@@ -1,5 +1,15 @@
 # Validation
 
+## 2026-11-04
+
+Host regression checks now compile the production receive, queue teardown, command recovery, and status-dispatch method bodies with memory-only substitutes for DriverKit services. The real C protocol and ring helpers are linked where used. AddressSanitizer and UndefinedBehaviorSanitizer are enabled. These harnesses check control flow and data handling, not the SDK ABI, native RPC scheduling, or physical hardware.
+
+The pre-fix receive harness reproduced 18 failures across the overflow subcases: one full UART ring stopped the shared device and prevented later records from reaching other ports. The fixed path reports the affected port's overrun, preserves its buffered data and indices, continues delivery to healthy ports, rearms the USB receive, and resumes that UART after its client drains the ring. Invalid ring state and malformed USB transfers remain fatal. Queue-lifetime tests cover retired writes and replacement rings in both completion orders; command tests cover one-time stall clearing without command replay; status tests cover modem delta preservation, zero interrupt identifiers, four-byte modem-read replies, and whole-transfer validation before callbacks.
+
+`scripts/test.sh` passes all 43 Python tests and both C test executables. Protocol tests include in-place transmit payloads, mixed-length status records, truncation boundaries, and modem-bit merge combinations. A separate deterministic 100,000-input protocol stress check passed under both sanitizers. The unsigned installer and extension build successfully for both `arm64` and `x86_64`.
+
+No driver was installed or activated during these checks, and no serial port was opened or UART payload transmitted. Physical overflow, continuous multi-port traffic, modem-pin behavior, USB fault recovery, and sleep/wake remain unqualified for this revision. The watchdog's clock accounting excludes system sleep; that change alone does not establish complete suspend/resume support.
+
 ## 2026-11-02
 
 The icon update is installed as development-signed build `0.1.0/12`. Both `/Applications/CH348.app` and the new system-managed driver extension contain the checked-in `CH348.icns` resource and declare it through `CFBundleIconFile`. Signature validation passed, and `systemextensionsctl list` reports build 12 as `activated enabled` with the display name `CH348 Serial Driver`. The app icon resolves correctly through macOS; the icon in System Settings has not been visually verified.

@@ -1,6 +1,7 @@
 #include "CH348Port.h"
 #include "CH348Device.h"
 #include "ch348_ring.h"
+#include "ch348_protocol.h"
 
 #include <DriverKit/IOLib.h>
 #include <stdio.h>
@@ -112,7 +113,7 @@ kern_return_t IMPL(CH348Port, Start) {
 }
 
 kern_return_t IMPL(CH348Port, Stop) {
-    ivars->active = false;
+    (void)HwDeactivate_Impl();
     ivars->started = false;
     Cleanup();
     ivars->owner = nullptr;
@@ -146,23 +147,26 @@ kern_return_t IMPL(CH348Port, ConnectQueues) {
     }
     ivars->queue = reinterpret_cast<driverkit::serial::SerialPortInterface *>(
         ivars->interface_map->GetAddress());
-    if (ivars->queue->rxqlogsz == 0 || ivars->queue->txqlogsz == 0 ||
-        ivars->queue->rxqlogsz > 30 || ivars->queue->txqlogsz > 30) {
+    const auto rx_logsz = __atomic_load_n(&ivars->queue->rxqlogsz, __ATOMIC_RELAXED);
+    const auto tx_logsz = __atomic_load_n(&ivars->queue->txqlogsz, __ATOMIC_RELAXED);
+    const auto rx_offset = __atomic_load_n(&ivars->queue->rxqoffset, __ATOMIC_RELAXED);
+    const auto tx_offset = __atomic_load_n(&ivars->queue->txqoffset, __ATOMIC_RELAXED);
+    if (rx_logsz == 0 || tx_logsz == 0 || rx_logsz > 30 || tx_logsz > 30) {
         Cleanup(); return kIOReturnBadArgument;
     }
-    ivars->rx_size = 1u << ivars->queue->rxqlogsz;
-    ivars->tx_size = 1u << ivars->queue->txqlogsz;
-    if (uint64_t(ivars->queue->rxqoffset) + ivars->rx_size > ivars->rx_map->GetLength() ||
-        uint64_t(ivars->queue->txqoffset) + ivars->tx_size > ivars->tx_map->GetLength()) {
+    ivars->rx_size = 1u << rx_logsz;
+    ivars->tx_size = 1u << tx_logsz;
+    if (uint64_t(rx_offset) + ivars->rx_size > ivars->rx_map->GetLength() ||
+        uint64_t(tx_offset) + ivars->tx_size > ivars->tx_map->GetLength()) {
         Cleanup(); return kIOReturnBadArgument;
     }
-    ivars->rx = reinterpret_cast<uint8_t *>(ivars->rx_map->GetAddress()) + ivars->queue->rxqoffset;
-    ivars->tx = reinterpret_cast<uint8_t *>(ivars->tx_map->GetAddress()) + ivars->queue->txqoffset;
+    ivars->rx = reinterpret_cast<uint8_t *>(ivars->rx_map->GetAddress()) + rx_offset;
+    ivars->tx = reinterpret_cast<uint8_t *>(ivars->tx_map->GetAddress()) + tx_offset;
     return kIOReturnSuccess;
 }
 
 kern_return_t IMPL(CH348Port, DisconnectQueues) {
-    ivars->active = false;
+    (void)HwDeactivate_Impl();
     Cleanup();
     return super::DisconnectQueues(SUPERDISPATCH);
 }
@@ -263,6 +267,7 @@ void IMPL(CH348Port, RxFreeSpaceAvailable) {}
 
 uint32_t CH348Port::CopyTransmit(uint8_t *out, uint32_t capacity) {
     if (!ivars->active || ivars->queue == nullptr) return 0;
+    if (ivars->baud < 9600 && capacity > 128) capacity = 128;
     const uint32_t producer = __atomic_load_n(&ivars->queue->txPI, __ATOMIC_ACQUIRE);
     const uint32_t consumer = __atomic_load_n(&ivars->queue->txCI, __ATOMIC_RELAXED);
     uint32_t count = 0;
@@ -295,9 +300,12 @@ int CH348Port::Receive(const uint8_t *data, uint32_t size) {
     const uint32_t producer = __atomic_load_n(&ivars->queue->rxPI, __ATOMIC_RELAXED);
     const uint32_t consumer = __atomic_load_n(&ivars->queue->rxCI, __ATOMIC_ACQUIRE);
     uint32_t next = producer;
-    if (ch348_ring_append(ivars->rx, ivars->rx_size, producer, consumer,
-                           data, size, &next) != 0) {
-        RxError(true, false, false, false); return -1;
+    const int result = ch348_ring_append(ivars->rx, ivars->rx_size, producer, consumer,
+                                         data, size, &next);
+    if (result != 0) {
+        (void)RxError(true, false, false, false);
+        // A slow reader may lose this record without stopping the shared USB stream.
+        return result == 1 ? 0 : -1;
     }
     __atomic_store_n(&ivars->queue->rxPI, next, __ATOMIC_RELEASE);
     ivars->rx_delivered += size;
@@ -306,9 +314,9 @@ int CH348Port::Receive(const uint8_t *data, uint32_t size) {
 }
 
 void CH348Port::UpdateModem(uint8_t status) {
-    ivars->modem = status;
-    (void)SetModemStatus((status & 0x10) != 0, (status & 0x20) != 0,
-                        (status & 0x40) != 0, (status & 0x80) != 0);
+    ivars->modem = ch348_merge_modem(ivars->modem, status);
+    (void)SetModemStatus((ivars->modem & 0x10) != 0, (ivars->modem & 0x20) != 0,
+                        (ivars->modem & 0x40) != 0, (ivars->modem & 0x80) != 0);
 }
 
 void CH348Port::ReportLineError(uint8_t status) {
