@@ -4,7 +4,7 @@ IdySite.init({
   en: {
     pageTitle: "CH348 for macOS — Eight UARTs. Native ports.",
     pageDescription: "An open-source DriverKit driver for WCH CH348 USB-to-eight-UART adapters. Native macOS serial ports, development builds, and hardware validation notes.",
-    downloads: "Downloads", docs: "Docs", heroTitle: "Eight UARTs.<br>Native ports.",
+    downloads: "Downloads", docs: "Docs", starLabel: "Star CH348 on GitHub (opens in a new tab)", heroTitle: "Eight UARTs.<br>Native ports.",
     heroDescription: "A macOS DriverKit driver for WCH CH348 USB adapters. Standard serial devices for the tools you already use.",
     exploreSource: "Explore the source",
     requirements: 'macOS 14+ <span aria-hidden="true">/</span> Apple Silicon + Intel builds <span aria-hidden="true">/</span> MIT',
@@ -39,7 +39,7 @@ IdySite.init({
   zh: {
     pageTitle: "CH348 macOS 驱动 — 八路串口，原生设备。",
     pageDescription: "适用于 WCH CH348 USB 转八路 UART 适配器的开源 DriverKit 驱动。支持 macOS 原生串口，提供开发版本与硬件验证记录。",
-    downloads: "下载", docs: "文档", heroTitle: "八路串口。<br>原生设备。",
+    downloads: "下载", docs: "文档", starLabel: "star — 在 GitHub 上为 CH348 点星（在新标签页打开）", heroTitle: "八路串口。<br>原生设备。",
     heroDescription: "为 WCH CH348 USB 适配器打造的 macOS DriverKit 驱动。使用标准串口设备，兼容你熟悉的工具。",
     exploreSource: "查看源代码",
     requirements: 'macOS 14+ <span aria-hidden="true">/</span> Apple Silicon 与 Intel 构建 <span aria-hidden="true">/</span> MIT',
