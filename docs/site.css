@@ -161,21 +161,33 @@ h1 { margin: 0 0 24px; font-size: clamp(42px, 5.2vw, 62px); letter-spacing: -.06
   .site-footer { flex-direction: column; gap: 14px; padding-top: 24px; }
 }
 
+:root {
+  --paper: var(--idy-bg);
+  --surface: var(--idy-surface);
+  --ink: var(--idy-ink);
+  --muted: var(--idy-muted);
+  --line: var(--idy-line);
+  --sans: var(--idy-font);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --accent: #8dc4cb;
+  --on-accent: #18313b;
+  --terminal: #1c2b42;
+  --preview: #e1ba8d;
+  --preview-bg: #3c332b;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     color-scheme: dark;
-    --paper: #192a36;
-    --surface: #20333f;
-    --ink: #e6eef3;
-    --muted: #acbeca;
-    --line: #3b515f;
     --accent: #8dc4cb;
     --on-accent: #18313b;
-    --terminal: #213642;
+    --terminal: #1c2b42;
     --preview: #e1ba8d;
     --preview-bg: #3c332b;
   }
 }
+.download-copy > p.release-status { margin-top: 12px; font-size: 12px; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

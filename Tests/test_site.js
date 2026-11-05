@@ -5,13 +5,11 @@ const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
-
 const root = join(__dirname, "..");
-const source = readFileSync(join(root, "docs/site.js"), "utf8");
+const read = file => readFileSync(join(root, "docs", file), "utf8");
 const repository = "https://github.com/idy/ch348-macos";
 
-function release({ version = "0.1.1", build = 13,
-  published = "2026-11-04T06:53:51Z", prerelease = true, unsigned = true } = {}) {
+function release({ version = "0.1.1", build = 13, published = "2026-11-04T06:53:51Z", prerelease = true, unsigned = true } = {}) {
   const tag = prerelease ? `v${version}-dev.${build}-pkg.1` : `v${version}`;
   const prefix = `${repository}/releases/download/${tag}/`;
   const name = `CH348-${version}-build${build}-macos-universal${unsigned ? "-unsigned" : ""}.pkg`;
@@ -24,129 +22,139 @@ function release({ version = "0.1.1", build = 13,
     ],
   };
 }
+const response = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
+const previewFetcher = releases => async url => url.endsWith("/latest") ? response({}, 404) : response(releases);
 
-const response = releases => ({ ok: true, json: async () => releases });
-
-async function render(fetcher, { timeoutImmediately = false } = {}) {
+async function render(fetcher, { languages = ["en"], stored = {}, dark = false, blockedStorage = false, timeoutImmediately = false } = {}) {
   const fields = {};
-  for (const field of ["download", "notes", "checksum", "stage", "version", "filename", "size",
-    "warning-title", "warning-detail", "caveat"]) {
+  for (const field of ["download", "notes", "checksum", "stage", "version", "filename", "size", "warning-title", "warning-detail", "caveat", "status"]) {
     fields[`[data-release-${field}]`] = Array.from({ length: field === "download" ? 2 : 1 },
-      () => ({ href: "fallback-link", textContent: "fallback-text" }));
+      () => ({ href: `${repository}/releases`, textContent: "", hidden: false }));
   }
-  const original = JSON.stringify(fields);
+  fields[".download-file"] = [{ hidden: true }];
+  const listeners = new Map();
+  const events = {};
+  const media = { matches: dark, addEventListener: (_, callback) => { events.systemTheme = callback; } };
+  const control = () => ({ value: "", addEventListener: (_, callback) => { const handle = callback; return handle; } });
+  const languageControl = control();
+  const themeControl = control();
+  languageControl.addEventListener = (_, callback) => { events.languageControl = callback; };
+  themeControl.addEventListener = (_, callback) => { events.themeControl = callback; };
+  fields["[data-idy-language]"] = [languageControl];
+  fields["[data-idy-theme]"] = [themeControl];
+  const document = {
+    documentElement: { dataset: {}, style: {}, lang: "en" },
+    querySelector: () => null,
+    querySelectorAll: selector => fields[selector] || [],
+    addEventListener(type, callback) { listeners.set(type, [...(listeners.get(type) || []), callback]); },
+    dispatchEvent(event) { for (const callback of listeners.get(event.type) || []) callback(event); },
+  };
   const requests = [];
   const deadlines = [];
-  await vm.runInNewContext(source, {
-    document: { querySelectorAll: selector => fields[selector] || [] },
-    navigator: {}, AbortController,
-    setTimeout: (callback, delay) => {
-      deadlines.push(delay);
-      return setTimeout(callback, timeoutImmediately ? 0 : delay);
+  const context = {
+    document, navigator: { languages }, AbortController,
+    CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
+    localStorage: {
+      getItem(key) { if (blockedStorage) throw new Error("blocked"); return stored[key]; },
+      setItem(key, value) { if (blockedStorage) throw new Error("blocked"); stored[key] = value; },
     },
+    matchMedia: () => media,
+    addEventListener: (type, callback) => { events[type] = callback; },
+    setTimeout(callback, delay) { deadlines.push(delay); return setTimeout(callback, timeoutImmediately ? 0 : delay); },
     clearTimeout,
-    fetch: (url, options) => { requests.push({ url, options }); return fetcher(url, options); },
-  });
+    fetch(url, options) { requests.push({ url, options }); return fetcher(url, options); },
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(read("shared/idy.js"), context);
+  vm.runInContext(read("translations.js"), context);
+  await vm.runInContext(read("site.js"), context);
+  document.dispatchEvent({ type: "DOMContentLoaded" });
   return {
-    fields, original, requests, deadlines,
+    fields, context, requests, deadlines, stored,
     node: field => fields[`[data-release-${field}]`][0],
+    language(value) { languageControl.value = value; events.languageControl(); },
+    theme(value) { themeControl.value = value; events.themeControl(); },
+    systemTheme(value) { media.matches = value; events.systemTheme(); },
   };
 }
 
 function assertSelected(page, selected) {
-  for (const link of page.fields["[data-release-download]"])
-    assert.equal(link.href, selected.assets[0].browser_download_url);
+  for (const link of page.fields["[data-release-download]"]) assert.equal(link.href, selected.assets[0].browser_download_url);
   assert.equal(page.node("version").textContent, selected.tag_name);
   assert.equal(page.node("filename").textContent, selected.assets[0].name);
-  assert.equal(page.node("size").textContent, "1.4 MB · Apple Silicon + Intel");
   assert.equal(page.node("notes").href, selected.html_url);
   assert.equal(page.node("checksum").href, selected.assets[1].browser_download_url);
+  assert.equal(page.node("checksum").hidden, false);
 }
-
 function assertFallback(page) {
-  assert.equal(JSON.stringify(page.fields), page.original);
-  assert.equal(page.requests.length, 1);
+  assert.equal(page.node("download").href, `${repository}/releases`);
+  assert.equal(page.node("version").textContent, "GitHub Releases");
+  assert.equal(page.node("checksum").hidden, true);
+  assert.match(page.node("status").textContent, /unavailable/);
 }
 
-test("uses the public releases list and includes the newest prerelease", async () => {
-  const preview = release();
-  const stable = release({ version: "0.1.0", build: 12, prerelease: false, published: "2026-11-02T00:00:00Z" });
-  const page = await render(async () => response([stable, preview]));
-  assertSelected(page, preview);
-  assert.equal(page.requests.length, 1);
-  assert.equal(page.requests[0].url, "https://api.github.com/repos/idy/ch348-macos/releases?per_page=100");
-  assert.equal(page.requests[0].options.credentials, "omit");
-  assert.equal(page.node("stage").textContent, "Development preview");
-  assert.equal(page.node("download").textContent, "Download unsigned PKG");
-});
-
-test("ignores drafts, source-only releases, and unfinished uploads", async () => {
-  const selected = release();
-  const draft = { ...release({ version: "0.2.0", build: 14, published: "2026-11-05T00:00:00Z" }), draft: true };
-  const sourceOnly = release({ version: "0.3.0", build: 15, published: "2026-11-06T00:00:00Z" });
-  sourceOnly.assets[0].name = "source.zip";
-  const pending = release({ version: "0.4.0", build: 16, published: "2026-11-07T00:00:00Z" });
-  pending.assets[0].state = "new";
-  const page = await render(async () => response([draft, sourceOnly, pending, selected]));
-  assertSelected(page, selected);
-});
-
-test("selects by publication time rather than array order or version number", async () => {
-  const newer = release();
-  const older = release({ version: "9.0.0", build: 99, published: "2026-10-01T00:00:00Z" });
-  const page = await render(async () => response([older, newer]));
-  assertSelected(page, newer);
-});
-
-test("keeps package, checksum, and notes on the same complete release", async () => {
-  const complete = release();
-  const incomplete = release({ version: "0.2.0", build: 14, published: "2026-11-05T00:00:00Z" });
-  incomplete.assets.pop();
-  assertSelected(await render(async () => response([incomplete, complete])), complete);
-});
-
-test("does not label a package without the unsigned suffix as signed or notarized", async () => {
-  const stable = release({ version: "0.2.0", build: 14, prerelease: false, unsigned: false });
-  const page = await render(async () => response([stable]));
+test("selects the latest stable release and never constructs download links", async () => {
+  const stable = release({ prerelease: false });
+  const page = await render(async () => response(stable));
   assertSelected(page, stable);
-  assert.equal(page.node("stage").textContent, "Release");
-  assert.equal(page.node("download").textContent, "Download PKG");
-  assert.match(page.node("warning-detail").textContent, /release notes/);
-  assert.doesNotMatch(page.node("caveat").textContent, /is signed|is notarized/i);
+  assert.equal(page.requests.length, 1);
+  assert.equal(page.requests[0].url, "https://api.github.com/repos/idy/ch348-macos/releases/latest");
+  assert.equal(page.requests[0].options.credentials, "omit");
+  assert.equal(page.node("stage").textContent, "Stable release");
 });
 
-test("rejects download URLs outside the selected repository and tag", async () => {
-  const valid = release();
-  for (const url of ["javascript:alert(1)", "https://example.com/pkg", valid.assets[0].browser_download_url]) {
-    const wrong = release({ version: "0.2.0", build: 14, published: "2026-11-05T00:00:00Z" });
-    wrong.assets[0].browser_download_url = url;
-    assertSelected(await render(async () => response([wrong, valid])), valid);
+test("falls back to the newest published preview when no stable release exists", async () => {
+  const preview = release();
+  const old = release({ version: "9.0.0", published: "2026-10-01T00:00:00Z" });
+  const draft = { ...release({ version: "2.0.0", published: "2026-11-05T00:00:00Z" }), draft: true };
+  const page = await render(previewFetcher([old, null, draft, preview]));
+  assertSelected(page, preview);
+  assert.equal(page.requests.length, 2);
+  assert.match(page.requests[1].url, /releases\?per_page=100$/);
+  assert.equal(page.node("stage").textContent, "Preview release");
+});
+
+test("keeps latest metadata truthful when packages or checksums are missing", async () => {
+  for (const assets of [[], [release().assets[0]], [{ ...release().assets[0], state: "new" }, release().assets[1]]]) {
+    const current = { ...release(), assets };
+    const page = await render(previewFetcher([current]));
+    assert.equal(page.node("version").textContent, current.tag_name);
+    assert.equal(page.node("download").href, current.html_url);
+    assert.equal(page.node("checksum").hidden, true);
+    assert.match(page.node("status").textContent, /no complete PKG/);
   }
 });
 
-test("skips malformed release entries without losing the valid package", async () => {
-  const valid = release();
-  const malformed = [null, {}, { published_at: "invalid", assets: [] }, { ...valid, assets: null }];
-  assertSelected(await render(async () => response([...malformed, valid])), valid);
+test("rejects asset URLs from a different repository or release tag", async () => {
+  for (const url of ["javascript:alert(1)", "https://example.com/pkg", release({ version: "0.0.1" }).assets[0].browser_download_url]) {
+    const current = release(); current.assets[0].browser_download_url = url;
+    const page = await render(previewFetcher([current]));
+    assert.equal(page.node("download").href, current.html_url);
+    assert.equal(page.fields[".download-file"][0].hidden, true);
+  }
 });
 
-for (const status of [403, 404, 500]) {
-  test(`preserves the complete static fallback on HTTP ${status}`, async () => {
-    assertFallback(await render(async () => ({ ok: false, status })));
+test("does not infer signing or notarization from a filename without unsigned", async () => {
+  const current = release({ unsigned: false, prerelease: false });
+  const page = await render(async () => response(current));
+  assertSelected(page, current);
+  assert.equal(page.node("download").textContent, "Download PKG");
+  assert.equal(page.node("warning-title").textContent, "Review signing before activation.");
+});
+
+for (const status of [403, 500]) {
+  test(`shows a usable fallback on HTTP ${status}`, async () => {
+    const page = await render(async () => response({}, status));
+    assertFallback(page); assert.equal(page.requests.length, 1);
   });
 }
-
-test("preserves fallback links when the network or JSON decoding fails", async () => {
+test("handles empty or malformed release lists and network/JSON failures", async () => {
+  for (const body of [[], null, {}, [{ ...release(), published_at: "invalid" }]]) assertFallback(await render(previewFetcher(body)));
   assertFallback(await render(async () => { throw new Error("offline"); }));
-  assertFallback(await render(async () => ({ ok: true, json: async () => { throw new SyntaxError("invalid JSON"); } })));
+  assertFallback(await render(async () => ({ ok: true, json: async () => { throw new SyntaxError("JSON"); } })));
 });
-
-test("preserves fallback links for empty, unavailable, or malformed release lists", async () => {
-  for (const body of [[], null, {}, { message: "rate limited" }, [release({ published: "invalid" })]])
-    assertFallback(await render(async () => response(body)));
-});
-
-test("bounds a stalled request with an abort timeout", async () => {
+test("aborts stalled requests after the shared deadline", async () => {
   let signal;
   const page = await render((url, options) => new Promise((resolve, reject) => {
     signal = options.signal;
@@ -154,17 +162,41 @@ test("bounds a stalled request with an abort timeout", async () => {
   }), { timeoutImmediately: true });
   assertFallback(page);
   assert.equal(signal.aborted, true);
-  assert.deepEqual(page.deadlines, [5000]);
+  assert.deepEqual(page.deadlines, [8000]);
 });
 
-test("HTML fallback serves build 13 and exposes every metadata update target", () => {
-  const html = readFileSync(join(root, "docs/index.html"), "utf8");
-  const downloads = [...html.matchAll(/<a\b([^>]*)>/g)]
-    .filter(match => match[1].includes("data-release-download"));
-  assert.equal(downloads.length, 2);
-  for (const match of downloads)
-    assert.match(match[1], /href="https:\/\/github\.com\/idy\/ch348-macos\/releases\/download\/v0\.1\.1-dev\.13-pkg\.1\/CH348-0\.1\.1-build13-macos-universal-unsigned\.pkg"/);
-  for (const field of ["notes", "checksum", "stage", "version", "filename", "size", "warning-title", "warning-detail", "caveat"])
-    assert.ok(html.includes(`data-release-${field}`), `Missing release ${field} binding`);
+test("uses browser language and translates live release details without losing links", async () => {
+  const current = release();
+  const page = await render(previewFetcher([current]), { languages: ["zh-HK", "en-US"] });
+  assert.equal(page.context.document.documentElement.lang, "zh-CN");
+  assert.equal(page.node("download").textContent, "下载未签名 PKG");
+  page.language("en"); assertSelected(page, current);
+  assert.equal(page.node("download").textContent, "Download unsigned PKG");
+  assert.equal(page.stored["idy-language"], "en");
+  page.language("auto"); assert.equal(page.node("download").textContent, "下载未签名 PKG");
+});
+test("follows system changes until an explicit theme is chosen", async () => {
+  const page = await render(async () => response(release()), { dark: true });
+  const element = page.context.document.documentElement;
+  assert.equal(element.dataset.theme, "dark");
+  page.systemTheme(false); assert.equal(element.dataset.theme, "light");
+  page.theme("dark"); page.systemTheme(false); assert.equal(element.dataset.theme, "dark");
+  page.theme("system"); assert.equal(element.dataset.theme, "light");
+});
+test("works without browser storage and honors saved explicit language", async () => {
+  const page = await render(async () => response(release()), { blockedStorage: true, languages: ["fr-FR"] });
+  assert.equal(page.context.document.documentElement.lang, "en");
+  page.language("zh"); page.theme("dark");
+  assert.equal(page.context.document.documentElement.lang, "zh-CN");
+  assert.equal(page.context.document.documentElement.dataset.theme, "dark");
+  const saved = await render(async () => response(release()), { stored: { "idy-language": "en", "idy-theme": "light" }, languages: ["zh-CN"], dark: true });
+  assert.equal(saved.context.document.documentElement.lang, "en");
+  assert.equal(saved.context.document.documentElement.dataset.theme, "light");
+});
+test("static HTML has no pinned latest release and retains historical validation context", () => {
+  const html = read("index.html");
+  assert.doesNotMatch(html, /https:\/\/github\.com\/idy\/ch348-macos\/releases\/(download|tag)\//);
   assert.match(html, /Hardware smoke tests were recorded with/);
+  assert.equal((html.match(/data-release-download/g) || []).length, 2);
+  assert.match(html, /shared\/idy\.js/);
 });

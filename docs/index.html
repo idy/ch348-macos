@@ -12,40 +12,44 @@
   <meta property="og:url" content="https://ch343-macos.idy.dev/">
   <link rel="canonical" href="https://ch343-macos.idy.dev/">
   <link rel="icon" type="image/png" href="./icon.png">
+  <script src="./shared/idy.js"></script>
   <link rel="stylesheet" href="./site.css">
+  <link rel="stylesheet" href="./shared/idy.css">
+  <script src="./translations.js" defer></script>
   <script src="./site.js" defer></script>
 </head>
 <body id="top">
-  <a class="skip-link" href="#main">Skip to content</a>
-  <div class="page">
-    <header class="site-header">
-      <a class="wordmark" href="#top" aria-label="CH348 for macOS home">
-        <img src="./icon.png" alt="" width="36" height="36">
-        <span>CH348<span class="wordmark-divider">/</span>macOS</span>
-      </a>
-      <nav aria-label="Main navigation">
-        <a href="https://idy.dev/" aria-label="idy.dev home">idy.dev</a>
-        <a href="#download">Downloads</a>
-        <a class="nav-docs" href="https://github.com/idy/ch348-macos/blob/main/README.md">Docs</a>
-        <a class="star-repo" href="https://github.com/idy/ch348-macos" target="_blank" rel="noopener noreferrer" aria-label="Star idy/ch348-macos on GitHub"><svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="m8 1.25 2.1 4.26 4.7.68-3.4 3.32.8 4.68L8 11.98l-4.2 2.21.8-4.68L1.2 6.19l4.7-.68Z"/></svg>Star repo</a>
+  <a class="skip-link" href="#main" data-i18n="skipContent">Skip to content</a>
+  <header class="idy-header">
+    <div class="idy-header-inner">
+      <a class="idy-home" href="https://idy.dev/">idy.dev</a>
+      <a class="idy-project" href="#main">CH348 / macOS</a>
+      <nav class="idy-nav" aria-label="Main navigation" data-i18n-aria-label="navigation">
+        <a href="#download" data-i18n="downloads">Downloads</a>
+        <a href="https://github.com/idy/ch348-macos/blob/main/README.md" data-i18n="docs">Docs</a>
+        <a href="https://github.com/idy/ch348-macos">GitHub</a>
       </nav>
-    </header>
-
+      <div class="idy-preferences">
+        <label><span data-i18n="language">Language</span><select data-idy-language><option value="auto" data-i18n="automatic">Auto</option><option value="en">English</option><option value="zh">中文</option></select></label>
+        <label><span data-i18n="theme">Theme</span><select data-idy-theme><option value="system" data-i18n="system">System</option><option value="light" data-i18n="light">Light</option><option value="dark" data-i18n="dark">Dark</option></select></label>
+      </div>
+    </div>
+  </header>
+  <div class="page">
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="release-state"><span class="status-dot" aria-hidden="true"></span><span data-release-stage>Development preview</span></p>
-          <h1 id="hero-title">Eight UARTs.<br>Native ports.</h1>
-          <p class="hero-description">A macOS DriverKit driver for WCH CH348 USB adapters. Standard serial devices for the tools you already use.</p>
+          <p class="release-state"><span class="status-dot" aria-hidden="true"></span><span data-release-stage>Development builds</span></p>
+          <h1 id="hero-title" data-i18n-html="heroTitle">Eight UARTs.<br>Native ports.</h1>
+          <p class="hero-description" data-i18n="heroDescription">A macOS DriverKit driver for WCH CH348 USB adapters. Standard serial devices for the tools you already use.</p>
           <div class="hero-actions">
-            <a class="button button-primary" data-release-download href="https://github.com/idy/ch348-macos/releases/download/v0.1.1-dev.13-pkg.1/CH348-0.1.1-build13-macos-universal-unsigned.pkg">Download unsigned PKG</a>
-            <a class="source-link" href="https://github.com/idy/ch348-macos">Explore the source</a>
+            <a class="button button-primary" data-release-download href="https://github.com/idy/ch348-macos/releases">Browse releases</a>
+            <a class="source-link" href="https://github.com/idy/ch348-macos" data-i18n="exploreSource">Explore the source</a>
           </div>
-          <p class="hero-footnote">macOS 14+ <span aria-hidden="true">/</span> Apple Silicon + Intel builds <span aria-hidden="true">/</span> MIT</p>
+          <p class="hero-footnote" data-i18n-html="requirements">macOS 14+ <span aria-hidden="true">/</span> Apple Silicon + Intel builds <span aria-hidden="true">/</span> MIT</p>
         </div>
-
-        <div class="terminal" aria-label="Example serial device names after a signed development installation">
-          <div class="terminal-heading"><span class="terminal-path">/dev</span><span>Native serial devices</span></div>
+        <div class="terminal" aria-label="Example serial device names after a signed development installation" data-i18n-aria-label="terminalLabel">
+          <div class="terminal-heading"><span class="terminal-path">/dev</span><span data-i18n="nativeDevices">Native serial devices</span></div>
           <pre><code><span class="prompt">$</span> ls /dev/cu.CH348*
 <span class="terminal-output">/dev/cu.CH34800100000-0
 /dev/cu.CH34800100000-1
@@ -55,75 +59,79 @@
 /dev/cu.CH34800100000-5
 /dev/cu.CH34800100000-6
 /dev/cu.CH34800100000-7</span></code></pre>
-          <p class="terminal-note">Example after development installation.<br>Names include the adapter’s USB location.</p>
+          <p class="terminal-note" data-i18n-html="terminalNote">Example after development installation.<br>Names include the adapter’s USB location.</p>
         </div>
       </section>
-
-      <aside class="preview-notice" aria-label="Release signing status">
+      <aside class="preview-notice" aria-label="Release signing status" data-i18n-aria-label="signingStatus">
         <span class="notice-mark" aria-hidden="true">i</span>
-        <p><strong data-release-warning-title>This PKG is unsigned.</strong> <span data-release-warning-detail>Distribution signing and notarization are pending.</span> A valid signature and provisioning profile are required to activate the driver. <a href="https://github.com/idy/ch348-macos#build-and-install">Read the installation guide.</a></p>
+        <p><strong data-release-warning-title>Review signing before activation.</strong> <span data-release-warning-detail>See the release notes for signing and notarization details.</span> <span data-i18n="activationRequirement">A valid signature and provisioning profile are required to activate the driver.</span> <a href="https://github.com/idy/ch348-macos#build-and-install" data-i18n="installGuide">Read the installation guide.</a></p>
       </aside>
-
-      <section class="overview section" aria-label="Compatibility and validation">
+      <section class="overview section" aria-label="Compatibility and validation" data-i18n-aria-label="compatibility">
         <div>
-          <h2>Made for CH348.</h2>
-          <p class="section-intro">One USB device. Eight native serial services.</p>
+          <h2 data-i18n="hardwareTitle">Made for CH348.</h2>
+          <p class="section-intro" data-i18n="hardwareIntro">One USB device. Eight native serial services.</p>
           <dl class="spec-list">
-            <div><dt>Hardware</dt><dd>WCH CH348 <code>1a86:55d9</code></dd></div>
-            <div><dt>System</dt><dd>macOS 14 or later</dd></div>
-            <div><dt>Interface</dt><dd>DriverKit + SerialDriverKit</dd></div>
-            <div><dt>Devices</dt><dd><code>/dev/cu.*</code> and <code>/dev/tty.*</code></dd></div>
+            <div><dt data-i18n="hardware">Hardware</dt><dd>WCH CH348 <code>1a86:55d9</code></dd></div>
+            <div><dt data-i18n="operatingSystem">System</dt><dd data-i18n="minimumOS">macOS 14 or later</dd></div>
+            <div><dt data-i18n="interface">Interface</dt><dd>DriverKit + SerialDriverKit</dd></div>
+            <div><dt data-i18n="devices">Devices</dt><dd data-i18n-html="devicePaths"><code>/dev/cu.*</code> and <code>/dev/tty.*</code></dd></div>
           </dl>
-          <p class="detail-note">CH348 has eight UARTs per chip. Other WCH chip families, including CH343, need their own driver support.</p>
+          <p class="detail-note" data-i18n="hardwareNote">CH348 has eight UARTs per chip. Other WCH chip families, including CH343, need their own driver support.</p>
         </div>
         <div class="validation">
-          <h2>Tested on real hardware.</h2>
-          <p class="section-intro">Hardware smoke tests were recorded with <code>0.1.0 / 12</code>.</p>
+          <h2 data-i18n="validationTitle">Tested on real hardware.</h2>
+          <p class="section-intro" data-i18n-html="validationVersion">Hardware smoke tests were recorded with <code>0.1.0 / 12</code>.</p>
           <ul class="check-list">
-            <li><span aria-hidden="true">✓</span><div>Eight native serial ports on Apple Silicon.</div></li>
-            <li><span aria-hidden="true">✓</span><div>Driver replacement after a physical reconnect.</div></li>
-            <li><span aria-hidden="true">✓</span><div>H2Loader command exchange through native ports.</div></li>
+            <li><span aria-hidden="true">✓</span><div data-i18n="validationPorts">Eight native serial ports on Apple Silicon.</div></li>
+            <li><span aria-hidden="true">✓</span><div data-i18n="validationReconnect">Driver replacement after a physical reconnect.</div></li>
+            <li><span aria-hidden="true">✓</span><div data-i18n="validationLoader">H2Loader command exchange through native ports.</div></li>
           </ul>
-          <p class="detail-note">Intel runtime, simultaneous multi-adapter use, sustained throughput, sleep and reboot still need qualification.</p>
-          <a class="text-link" href="https://github.com/idy/ch348-macos/blob/main/VALIDATION.md">Read the validation notes</a>
+          <p class="detail-note" data-i18n="validationRemaining">Intel runtime, simultaneous multi-adapter use, sustained throughput, sleep and reboot still need qualification.</p>
+          <a class="text-link" href="https://github.com/idy/ch348-macos/blob/main/VALIDATION.md" data-i18n="validationNotes">Read the validation notes</a>
         </div>
       </section>
-
       <section class="development section" aria-labelledby="build-title">
         <div class="build-copy" id="build">
-          <h2 id="build-title">Build from source.</h2>
-          <p>A small native project, with host-side protocol and ring-buffer tests. Use a full Xcode installation and XcodeGen.</p>
-          <p class="detail-note">These commands produce an unsigned development package. The <a href="https://github.com/idy/ch348-macos#build-and-install">signing guide</a> covers local driver activation.</p>
+          <h2 id="build-title" data-i18n="buildTitle">Build from source.</h2>
+          <p data-i18n="buildDescription">A small native project, with host-side protocol and ring-buffer tests. Use a full Xcode installation and XcodeGen.</p>
+          <p class="detail-note" data-i18n-html="buildNote">These commands produce an unsigned development package. The <a href="https://github.com/idy/ch348-macos#build-and-install">signing guide</a> covers local driver activation.</p>
         </div>
         <div class="code-panel">
-          <div class="code-heading"><span>From the repository root</span><button class="copy-button" type="button" data-copy="build-commands" hidden>Copy commands</button></div>
+          <div class="code-heading"><span data-i18n="repositoryRoot">From the repository root</span><button class="copy-button" type="button" data-copy="build-commands" data-i18n="copyCommands" hidden>Copy commands</button></div>
           <pre><code id="build-commands">scripts/test.sh
 scripts/build.sh --unsigned
 python3 scripts/package.py --unsigned</code></pre>
           <p class="copy-status" aria-live="polite" aria-atomic="true"></p>
         </div>
       </section>
-
       <section class="download section" id="download" aria-labelledby="download-title">
         <div class="download-copy">
-          <p class="download-version" data-release-version>v0.1.1-dev.13-pkg.1</p>
-          <h2 id="download-title">Download the latest PKG.</h2>
-          <div class="download-file"><code data-release-filename>CH348-0.1.1-build13-macos-universal-unsigned.pkg</code><span data-release-size>1.4 MB · Apple Silicon + Intel</span></div>
-          <p>The CI-built PKG contains the app and embedded driver. It places <code>CH348.app</code> in <code>/Applications</code>; extension activation is handled by the app. Find the installer under <strong>Assets</strong> in the PKG preview release.</p>
-          <p class="download-caveat" data-release-caveat>Unsigned and not notarized. This preview cannot activate the driver without valid signing.</p>
+          <p class="download-version" data-release-version>GitHub Releases</p>
+          <h2 id="download-title" data-i18n="downloadTitle">Get the latest package.</h2>
+          <div class="download-file" hidden><code data-release-filename></code><span data-release-size></span></div>
+          <p data-i18n-html="packageDescription">The CI-built PKG contains the app and embedded driver. It places <code>CH348.app</code> in <code>/Applications</code>; extension activation is handled by the app. Find the installer under <strong>Assets</strong> in the release.</p>
+          <p class="download-caveat" data-release-caveat>Read the release notes for signing and activation requirements.</p>
+          <p class="release-status" data-release-status role="status" aria-live="polite" data-i18n="loadingRelease">Checking the latest release…</p>
+          <noscript><p>JavaScript is off. Use GitHub Releases for the latest version and downloads.</p></noscript>
         </div>
         <div class="download-actions">
-          <a class="button button-primary" data-release-download href="https://github.com/idy/ch348-macos/releases/download/v0.1.1-dev.13-pkg.1/CH348-0.1.1-build13-macos-universal-unsigned.pkg">Download unsigned PKG</a>
-          <a class="text-link" data-release-notes href="https://github.com/idy/ch348-macos/releases/tag/v0.1.1-dev.13-pkg.1">Source &amp; release notes</a>
-          <a class="checksum-link" data-release-checksum href="https://github.com/idy/ch348-macos/releases/download/v0.1.1-dev.13-pkg.1/SHA256SUMS">SHA256SUMS</a>
+          <a class="button button-primary" data-release-download href="https://github.com/idy/ch348-macos/releases">Browse releases</a>
+          <a class="text-link" data-release-notes href="https://github.com/idy/ch348-macos/releases" data-i18n="releaseNotes">Source &amp; release notes</a>
+          <a class="checksum-link" data-release-checksum href="https://github.com/idy/ch348-macos/releases">SHA256SUMS</a>
         </div>
       </section>
     </main>
-
-    <footer class="site-footer">
-      <p><a href="https://github.com/idy/ch348-macos">CH348 for macOS</a> <span aria-hidden="true">/</span> Independent, open-source driver.</p>
-      <div><a href="https://github.com/idy/ch348-macos/blob/main/LICENSE">MIT license</a><a href="https://github.com/idy/ch348-macos/issues">Report an issue</a></div>
-    </footer>
   </div>
+  <footer class="idy-footer">
+    <div class="idy-footer-inner">
+      <div><a class="idy-home" href="https://idy.dev/">idy.dev</a><p data-i18n="footerNote">Independent tools. Open source.</p></div>
+      <nav aria-label="Project links" data-i18n-aria-label="projectLinks">
+        <a href="https://idy.dev/" data-i18n="allProjects">All projects</a>
+        <a href="https://github.com/idy/ch348-macos">GitHub</a>
+        <a href="https://github.com/idy/ch348-macos/releases" data-i18n="releases">Releases</a>
+        <a href="https://github.com/idy/ch348-macos/blob/main/LICENSE">MIT</a>
+      </nav>
+    </div>
+  </footer>
 </body>
 </html>
