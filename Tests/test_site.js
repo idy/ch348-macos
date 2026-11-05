@@ -237,7 +237,7 @@ test("header preserves desktop and mobile navigation and bilingual accessible la
   const page = await render(async () => response(release()));
   assert.equal(page.star.getAttribute("aria-label"), action["aria-label"]);
   page.language("zh");
-  assert.match(page.star.getAttribute("aria-label"), /GitHub.*CH348.*新标签页/);
+  assert.match(page.star.getAttribute("aria-label"), /^star\b.*GitHub.*CH348.*新标签页/);
   page.language("en");
   assert.equal(page.star.getAttribute("aria-label"), action["aria-label"]);
 });
