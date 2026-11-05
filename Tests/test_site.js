@@ -82,6 +82,7 @@ async function render(fetcher, { languages = ["en"], stored = {}, dark = false, 
     language(value) { languageControl.value = value; events.languageControl(); },
     theme(value) { themeControl.value = value; events.themeControl(); },
     systemTheme(value) { media.matches = value; events.systemTheme(); },
+    load() { events.load(); },
   };
 }
 
@@ -199,6 +200,13 @@ test("works without browser storage and honors saved explicit language", async (
   assert.equal(saved.context.document.documentElement.lang, "en");
   assert.equal(saved.context.document.documentElement.dataset.theme, "light");
 });
+test("native preference fallback reappears on load when header enhancement is unavailable", async () => {
+  const page = await render(async () => response(release()));
+  assert.equal(page.context.document.documentElement.dataset.idyHeaderPending, "true");
+  page.load();
+  assert.equal(page.context.document.documentElement.dataset.idyHeaderPending, undefined);
+});
+
 test("header preserves desktop and mobile navigation and bilingual accessible labels", async () => {
   const html = read("index.html");
   const header = html.match(/<header class="idy-header compact-header">([\s\S]*?)<\/header>/)[1];
@@ -271,7 +279,7 @@ test("enhanced preferences support keyboard selection and restore focus", () => 
   const header = new Element();
   header.querySelector = selector => selector === ".idy-preferences" ? native : mobile;
   document = new Element();
-  document.documentElement = { dataset: { theme: "light" } };
+  document.documentElement = { dataset: { theme: "light", idyHeaderPending: "true" } };
   document.createElement = () => new Element();
   document.querySelectorAll = () => [header];
   const media = new Element();
@@ -286,6 +294,7 @@ test("enhanced preferences support keyboard selection and restore focus", () => 
   document.dispatchEvent({ type: "DOMContentLoaded" });
 
   assert.equal(native.hidden, true);
+  assert.equal(document.documentElement.dataset.idyHeaderPending, undefined);
   const [themeRoot, languageRoot] = native.next.children;
   const [themeTrigger, themeMenu] = themeRoot.children;
   const [languageTrigger, languageMenu] = languageRoot.children;
