@@ -306,6 +306,21 @@ test("enhanced preferences support keyboard selection and restore focus", () => 
 
   languageTrigger.dispatchEvent({ type: "click" });
   assert.equal(languageMenu.hidden, false);
+  // Safari can blur the focused option with no related target before a tap's click.
+  languageRoot.dispatchEvent({ type: "focusout", relatedTarget: null });
+  assert.equal(languageMenu.hidden, false);
+  languageMenu.children[2].dispatchEvent({ type: "click" });
+  assert.equal(language.value, "zh");
+  assert.equal(languageMenu.hidden, true);
+  assert.equal(document.activeElement, languageTrigger);
+
+  languageTrigger.dispatchEvent({ type: "click" });
+  languageRoot.dispatchEvent({ type: "focusout", relatedTarget: themeTrigger });
+  assert.equal(languageMenu.hidden, true);
+  languageTrigger.dispatchEvent({ type: "click" });
+  window.dispatchEvent({ type: "blur" });
+  assert.equal(languageMenu.hidden, true);
+  languageTrigger.dispatchEvent({ type: "click" });
   document.dispatchEvent(key("Escape"));
   assert.equal(languageMenu.hidden, true);
   assert.equal(document.activeElement, languageTrigger);
@@ -318,6 +333,7 @@ test("enhanced preferences support keyboard selection and restore focus", () => 
   assert.equal(mobile.open, false);
   assert.equal(document.activeElement, summary);
   labels.language = "语言";
+  language.value = "auto";
   language.options[0].textContent = "自动";
   document.dispatchEvent({ type: "idy:languagechange" });
   assert.equal(languageTrigger.getAttribute("aria-label"), "语言: 自动");
