@@ -42,6 +42,12 @@ async function render(fetcher, { languages = ["en"], stored = {}, dark = false, 
   themeControl.addEventListener = (_, callback) => { events.themeControl = callback; };
   fields["[data-idy-language]"] = [languageControl];
   fields["[data-idy-theme]"] = [themeControl];
+  const star = {
+    label: "Star CH348 on GitHub (opens in a new tab)",
+    getAttribute(name) { return name === "data-i18n-aria-label" ? "starLabel" : this.label; },
+    setAttribute(name, value) { if (name === "aria-label") this.label = value; },
+  };
+  fields["[data-i18n-aria-label]"] = [star];
   const document = {
     documentElement: { dataset: {}, style: {}, lang: "en" },
     querySelector: () => null,
@@ -71,7 +77,7 @@ async function render(fetcher, { languages = ["en"], stored = {}, dark = false, 
   await vm.runInContext(read("site.js"), context);
   document.dispatchEvent({ type: "DOMContentLoaded" });
   return {
-    fields, context, requests, deadlines, stored,
+    fields, context, requests, deadlines, stored, star,
     node: field => fields[`[data-release-${field}]`][0],
     language(value) { languageControl.value = value; events.languageControl(); },
     theme(value) { themeControl.value = value; events.themeControl(); },
@@ -193,6 +199,130 @@ test("works without browser storage and honors saved explicit language", async (
   assert.equal(saved.context.document.documentElement.lang, "en");
   assert.equal(saved.context.document.documentElement.dataset.theme, "light");
 });
+test("header preserves desktop and mobile navigation and bilingual accessible labels", async () => {
+  const html = read("index.html");
+  const header = html.match(/<header class="idy-header compact-header">([\s\S]*?)<\/header>/)[1];
+  const navigation = [...header.matchAll(/<nav class="idy-(?:nav|mobile-panel)"[^>]*>([\s\S]*?)<\/nav>/g)];
+  const links = nav => [...nav[1].matchAll(/<a\b([^>]*)>([^<]*)<\/a>/g)].map(match => {
+    const attrs = Object.fromEntries([...match[1].matchAll(/([\w:-]+)="([^"]*)"/g)].map(attr => [attr[1], attr[2]]));
+    return [attrs.href, match[2], attrs["data-i18n"] || null];
+  });
+  assert.equal(navigation.length, 2);
+  assert.deepEqual(links(navigation[0]), links(navigation[1]));
+  assert.deepEqual(links(navigation[0]), [
+    ["#download", "Downloads", "downloads"],
+    ["https://github.com/idy/ch348-macos/blob/main/README.md", "Docs", "docs"],
+    [repository, "GitHub", null], ["https://idy.dev/", "idy.dev", null],
+  ]);
+  assert.match(header, /<a class="idy-home" href="#main">CH348<\/a>/);
+  assert.match(header, /<details class="idy-mobile">\s*<summary aria-label="Main navigation" data-i18n-aria-label="navigation">/);
+  assert.match(header, /<select data-idy-language>/);
+  assert.match(header, /<select data-idy-theme>/);
+  const action = Object.fromEntries([...header.match(/<a class="idy-action"([^>]*)>/)[1]
+    .matchAll(/([\w:-]+)="([^"]*)"/g)].map(attr => [attr[1], attr[2]]));
+  assert.equal(action.href, repository);
+  assert.equal(action.target, "_blank");
+  assert.match(action.rel, /noopener/);
+  assert.equal(action["aria-label"], "Star CH348 on GitHub (opens in a new tab)");
+  assert.equal(action["data-i18n-aria-label"], "starLabel");
+  assert.match(header, /<i class="ph ph-star" aria-hidden="true"><\/i><span>star<\/span>/);
+  const page = await render(async () => response(release()));
+  assert.equal(page.star.getAttribute("aria-label"), action["aria-label"]);
+  page.language("zh");
+  assert.match(page.star.getAttribute("aria-label"), /GitHub.*CH348.*新标签页/);
+  page.language("en");
+  assert.equal(page.star.getAttribute("aria-label"), action["aria-label"]);
+});
+
+test("enhanced preferences support keyboard selection and restore focus", () => {
+  let document;
+  class Element {
+    constructor() {
+      this.children = []; this.listeners = new Map(); this.attributes = {}; this.dataset = {};
+      this.classList = { add() {} }; this.style = {};
+    }
+    addEventListener(type, listener) {
+      this.listeners.set(type, [...(this.listeners.get(type) || []), listener]);
+    }
+    dispatchEvent(event) { for (const listener of this.listeners.get(event.type) || []) listener(event); }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    getAttribute(name) { return this.attributes[name] ?? null; }
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = children; }
+    focus() { document.activeElement = this; }
+    contains(node) { return this === node || this.children.some(child => child.contains(node)); }
+    getBoundingClientRect() { return { left: 100, right: 280 }; }
+  }
+  const select = (values, selected) => {
+    const node = new Element();
+    node.options = values.map(([value, textContent]) => ({ value, textContent }));
+    node.value = selected;
+    Object.defineProperty(node, "selectedIndex", { get: () => node.options.findIndex(option => option.value === node.value) });
+    return node;
+  };
+  const theme = select([["system", "System"], ["light", "Light"], ["dark", "Dark"]], "system");
+  const language = select([["auto", "Auto"], ["en", "English"], ["zh", "中文"]], "auto");
+  const native = new Element();
+  native.querySelector = selector => selector === "[data-idy-theme]" ? theme : language;
+  native.after = element => { native.next = element; };
+  const summary = new Element();
+  const mobile = new Element();
+  mobile.querySelector = () => summary;
+  const header = new Element();
+  header.querySelector = selector => selector === ".idy-preferences" ? native : mobile;
+  document = new Element();
+  document.documentElement = { dataset: { theme: "light" } };
+  document.createElement = () => new Element();
+  document.querySelectorAll = () => [header];
+  const media = new Element();
+  media.matches = false;
+  const labels = { theme: "Theme", language: "Language" };
+  const window = new Element();
+  window.IdySite = { t: key => labels[key] };
+  window.matchMedia = () => media;
+  const context = { document, window, IdySite: window.IdySite, innerWidth: 1000,
+    Event: class { constructor(type) { this.type = type; } } };
+  vm.runInNewContext(read("shared/header.js"), context);
+  document.dispatchEvent({ type: "DOMContentLoaded" });
+
+  assert.equal(native.hidden, true);
+  const [themeRoot, languageRoot] = native.next.children;
+  const [themeTrigger, themeMenu] = themeRoot.children;
+  const [languageTrigger, languageMenu] = languageRoot.children;
+  assert.equal(themeTrigger.getAttribute("aria-label"), "Theme: System");
+  assert.equal(themeMenu.getAttribute("role"), "menu");
+  assert.equal(themeMenu.children[0].getAttribute("role"), "menuitemradio");
+  const key = value => ({ type: "keydown", key: value, preventDefault() {} });
+  themeTrigger.dispatchEvent(key("ArrowDown"));
+  assert.equal(themeMenu.hidden, false);
+  assert.equal(document.activeElement, themeMenu.children[0]);
+  themeMenu.dispatchEvent(key("ArrowDown"));
+  assert.equal(document.activeElement, themeMenu.children[1]);
+  themeMenu.children[1].dispatchEvent({ type: "click" });
+  assert.equal(theme.value, "light");
+  assert.equal(themeMenu.children[1].getAttribute("aria-checked"), "true");
+  assert.equal(themeMenu.hidden, true);
+  assert.equal(document.activeElement, themeTrigger);
+
+  languageTrigger.dispatchEvent({ type: "click" });
+  assert.equal(languageMenu.hidden, false);
+  document.dispatchEvent(key("Escape"));
+  assert.equal(languageMenu.hidden, true);
+  assert.equal(document.activeElement, languageTrigger);
+  mobile.open = true;
+  themeTrigger.dispatchEvent({ type: "click" });
+  assert.equal(mobile.open, false);
+  document.dispatchEvent(key("Escape"));
+  mobile.open = true;
+  document.dispatchEvent(key("Escape"));
+  assert.equal(mobile.open, false);
+  assert.equal(document.activeElement, summary);
+  labels.language = "语言";
+  language.options[0].textContent = "自动";
+  document.dispatchEvent({ type: "idy:languagechange" });
+  assert.equal(languageTrigger.getAttribute("aria-label"), "语言: 自动");
+});
+
 test("static HTML has no pinned latest release and retains historical validation context", () => {
   const html = read("index.html");
   assert.doesNotMatch(html, /https:\/\/github\.com\/idy\/ch348-macos\/releases\/(download|tag)\//);
