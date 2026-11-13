@@ -12,15 +12,14 @@
   <meta property="og:url" content="https://ch343-macos.idy.dev/">
   <link rel="canonical" href="https://ch343-macos.idy.dev/">
   <link rel="icon" type="image/png" href="./icon.png">
-  <script src="./shared/idy.js"></script>
+  <meta name="theme-color" content="#0b5cad" data-idy-theme-color-light="#0b5cad" data-idy-theme-color-dark="#0b3d73">
+  <script src="./shared/sdk/idy-site.min.js"></script>
+  <link rel="stylesheet" href="./shared/sdk/idy-site.css">
   <link rel="stylesheet" href="./site.css">
-  <link rel="stylesheet" href="./shared/idy.css">
-  <link rel="stylesheet" href="./shared/header.css">
   <script src="./translations.js" defer></script>
   <script src="./site.js" defer></script>
-  <script src="./shared/header.js" defer></script>
 </head>
-<body id="top">
+<body class="idy-site" id="top">
   <a class="skip-link" href="#main" data-i18n="skipContent">Skip to content</a>
   <header class="idy-header compact-header">
     <div class="idy-header-inner">
@@ -53,9 +52,9 @@
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="release-state"><span class="status-dot" aria-hidden="true"></span><span data-release-stage>Development builds</span></p>
           <h1 id="hero-title" data-i18n-html="heroTitle">Eight UARTs.<br>Native ports.</h1>
           <p class="hero-description" data-i18n="heroDescription">A macOS DriverKit driver for WCH CH348 USB adapters. Standard serial devices for the tools you already use.</p>
+          <p class="release-state"><span class="status-dot" aria-hidden="true"></span><span data-release-stage>Development builds</span></p>
           <div class="hero-actions">
             <a class="button button-primary" data-release-download href="https://github.com/idy/ch348-macos/releases">Browse releases</a>
             <a class="source-link" href="https://github.com/idy/ch348-macos" data-i18n="exploreSource">Explore the source</a>
@@ -120,8 +119,8 @@ python3 scripts/package.py --unsigned</code></pre>
       </section>
       <section class="download section" id="download" aria-labelledby="download-title">
         <div class="download-copy">
-          <p class="download-version" data-release-version>GitHub Releases</p>
           <h2 id="download-title" data-i18n="downloadTitle">Get the latest package.</h2>
+          <p class="download-version" data-release-version>GitHub Releases</p>
           <div class="download-file" hidden><code data-release-filename></code><span data-release-size></span></div>
           <p data-i18n-html="packageDescription">The CI-built PKG contains the app and embedded driver. It places <code>CH348.app</code> in <code>/Applications</code>; extension activation is handled by the app. Find the installer under <strong>Assets</strong> in the release.</p>
           <p class="download-caveat" data-release-caveat>Read the release notes for signing and activation requirements.</p>
