@@ -49,6 +49,7 @@ async function render(fetcher, { languages = ["en"], stored = {}, dark = false, 
   };
   fields["[data-i18n-aria-label]"] = [star];
   const document = {
+    readyState: "loading",
     documentElement: { dataset: {}, style: {}, lang: "en" },
     querySelector: () => null,
     querySelectorAll: selector => fields[selector] || [],
@@ -71,16 +72,17 @@ async function render(fetcher, { languages = ["en"], stored = {}, dark = false, 
     fetch(url, options) { requests.push({ url, options }); return fetcher(url, options); },
   };
   context.window = context;
+  document.defaultView = context;
   vm.createContext(context);
-  vm.runInContext(read("shared/idy.js"), context);
+  vm.runInContext(read("shared/sdk/idy-site.min.js"), context);
   vm.runInContext(read("translations.js"), context);
   await vm.runInContext(read("site.js"), context);
   document.dispatchEvent({ type: "DOMContentLoaded" });
   return {
     fields, context, requests, deadlines, stored, star,
     node: field => fields[`[data-release-${field}]`][0],
-    language(value) { languageControl.value = value; events.languageControl(); },
-    theme(value) { themeControl.value = value; events.themeControl(); },
+    language(value) { context.IdySite.setLanguage(value); },
+    theme(value) { context.IdySite.setTheme(value); },
     systemTheme(value) { media.matches = value; events.systemTheme(); },
     load() { events.load(); },
   };
@@ -200,9 +202,9 @@ test("works without browser storage and honors saved explicit language", async (
   assert.equal(saved.context.document.documentElement.lang, "en");
   assert.equal(saved.context.document.documentElement.dataset.theme, "light");
 });
-test("native preference fallback reappears on load when header enhancement is unavailable", async () => {
+test("shared SDK finishes early preference initialization before load", async () => {
   const page = await render(async () => response(release()));
-  assert.equal(page.context.document.documentElement.dataset.idyHeaderPending, "true");
+  assert.equal(page.context.document.documentElement.dataset.idyHeaderPending, undefined);
   page.load();
   assert.equal(page.context.document.documentElement.dataset.idyHeaderPending, undefined);
 });
@@ -252,7 +254,11 @@ test("enhanced preferences support keyboard selection and restore focus", () => 
     addEventListener(type, listener) {
       this.listeners.set(type, [...(this.listeners.get(type) || []), listener]);
     }
-    dispatchEvent(event) { for (const listener of this.listeners.get(event.type) || []) listener(event); }
+    dispatchEvent(event) {
+      event.target ||= this;
+      for (const listener of this.listeners.get(event.type) || []) listener(event);
+      if (event.bubbles && this !== document) document.dispatchEvent(event);
+    }
     setAttribute(name, value) { this.attributes[name] = String(value); }
     getAttribute(name) { return this.attributes[name] ?? null; }
     append(...children) { this.children.push(...children); }
@@ -271,7 +277,7 @@ test("enhanced preferences support keyboard selection and restore focus", () => 
   const theme = select([["system", "System"], ["light", "Light"], ["dark", "Dark"]], "system");
   const language = select([["auto", "Auto"], ["en", "English"], ["zh", "中文"]], "auto");
   const native = new Element();
-  native.querySelector = selector => selector === "[data-idy-theme]" ? theme : language;
+  native.querySelector = selector => selector === "select[data-idy-theme]" ? theme : language;
   native.after = element => { native.next = element; };
   const summary = new Element();
   const mobile = new Element();
@@ -279,18 +285,31 @@ test("enhanced preferences support keyboard selection and restore focus", () => 
   const header = new Element();
   header.querySelector = selector => selector === ".idy-preferences" ? native : mobile;
   document = new Element();
-  document.documentElement = { dataset: { theme: "light", idyHeaderPending: "true" } };
+  document.readyState = "loading";
+  document.documentElement = { dataset: {}, style: {}, lang: "en" };
   document.createElement = () => new Element();
-  document.querySelectorAll = () => [header];
+  document.getElementById = () => null;
+  document.querySelector = selector => selector === ".compact-header .idy-mobile[open]" && mobile.open ? mobile : null;
+  document.querySelectorAll = selector => {
+    if (selector === ".compact-header") return [header];
+    if (selector === ".compact-header .idy-mobile[open]") return mobile.open ? [mobile] : [];
+    if (selector === "select[data-idy-theme]") return [theme];
+    if (selector === "select[data-idy-language]") return [language];
+    return [];
+  };
   const media = new Element();
   media.matches = false;
-  const labels = { theme: "Theme", language: "Language" };
   const window = new Element();
-  window.IdySite = { t: key => labels[key] };
+  window.document = document;
+  window.navigator = { languages: ["en"] };
+  window.localStorage = { getItem: () => null, setItem() {} };
   window.matchMedia = () => media;
-  const context = { document, window, IdySite: window.IdySite, innerWidth: 1000,
-    Event: class { constructor(type) { this.type = type; } } };
-  vm.runInNewContext(read("shared/header.js"), context);
+  window.innerWidth = 1000;
+  window.Event = class { constructor(type, options) { this.type = type; this.bubbles = options?.bubbles; } };
+  window.CustomEvent = class { constructor(type, options) { this.type = type; this.detail = options?.detail; } };
+  document.defaultView = window;
+  const context = { document, window, AbortController, setTimeout, clearTimeout };
+  vm.runInNewContext(read("shared/sdk/idy-site.min.js"), context);
   document.dispatchEvent({ type: "DOMContentLoaded" });
 
   assert.equal(native.hidden, true);
@@ -341,10 +360,9 @@ test("enhanced preferences support keyboard selection and restore focus", () => 
   document.dispatchEvent(key("Escape"));
   assert.equal(mobile.open, false);
   assert.equal(document.activeElement, summary);
-  labels.language = "语言";
   language.value = "auto";
   language.options[0].textContent = "自动";
-  document.dispatchEvent({ type: "idy:languagechange" });
+  window.IdySite.init({ en: { language: "语言" } });
   assert.equal(languageTrigger.getAttribute("aria-label"), "语言: 自动");
 });
 
@@ -353,5 +371,5 @@ test("static HTML has no pinned latest release and retains historical validation
   assert.doesNotMatch(html, /https:\/\/github\.com\/idy\/ch348-macos\/releases\/(download|tag)\//);
   assert.match(html, /Hardware smoke tests were recorded with/);
   assert.equal((html.match(/data-release-download/g) || []).length, 2);
-  assert.match(html, /shared\/idy\.js/);
+  assert.match(html, /shared\/sdk\/idy-site\.min\.js/);
 });
