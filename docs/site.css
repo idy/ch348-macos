@@ -11,14 +11,14 @@
   --sans: var(--idy-font);
 }
 html { scroll-padding-top: 28px; }
-.idy-site a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 4px; }
-.idy-site a:hover { text-decoration: underline; }
+.idy-site main a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.idy-site main a:hover { text-decoration: underline; }
 .idy-site button { font: inherit; }
 .idy-site pre, .idy-site code { font-family: var(--mono); }
 .idy-site code { font-size: .9em; }
 .idy-site pre { margin: 0; white-space: pre; overflow-x: auto; }
 .idy-site pre code { font-size: inherit; }
-.idy-site p { margin: 0 0 16px; }
+.idy-site main p { margin: 0 0 16px; }
 .idy-site h1, .idy-site h2 { color: var(--ink); font-weight: 700; letter-spacing: -.01em; }
 .idy-site h1 { margin: 0 0 16px; font-size: 32px; line-height: 1.25; }
 .idy-site h2 { margin: 0; font-size: 22px; line-height: 1.35; }
