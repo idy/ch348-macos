@@ -3,7 +3,7 @@ import SystemExtensions
 
 @main
 final class Installer: NSObject, NSApplicationDelegate, OSSystemExtensionRequestDelegate {
-    private let identifier = "com.idy.ch348-macos.driver"
+    private let identifier = Bundle.main.bundleIdentifier! + ".driver"
     private let status = NSTextField(wrappingLabelWithString: "Install the CH348 serial driver to publish eight system serial ports.")
     private var window: NSWindow!
 

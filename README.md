@@ -62,6 +62,16 @@ scripts/install.sh --development
 
 The signed build first provisions the concrete **My Mac (DriverKit)** destination, then embeds the extension into the installer. This ensures that the driver's profile includes the current Mac as well as the expected USB/Serial entitlements. Profiles that omit this Mac are rejected before installation.
 
+Bundle IDs are globally registered with Apple. When using a different developer team, select an available installer ID as well as the team:
+
+```sh
+CH348_DEVELOPMENT_TEAM=YOUR_TEAM_ID CH348_BUNDLE_ID=com.yourcompany.ch348 scripts/build.sh --development
+```
+
+The driver uses that ID plus `.driver`, and the package uses `.pkg`; the installer and validation scripts derive these identities from the built app. The default remains `com.idy.ch348-macos`. The installer refuses to overwrite an existing `/Applications/CH348.app` with a different bundle ID; uninstall the previous driver before switching identities.
+
+`scripts/build.sh` sets the bundle ID before generating the project so the embedded driver filename also matches. If running XcodeGen directly, set `CH348_BUNDLE_ID` in its environment, including when using the default ID.
+
 For an appropriately approved non-development USB grant, keep `Driver/Driver.entitlements` and use:
 
 ```sh

@@ -14,6 +14,7 @@ settings:
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_C_LANGUAGE_STANDARD: c11
     CH348_DRIVER_ENTITLEMENTS: Driver/Driver.entitlements
+    CH348_BUNDLE_ID: ${CH348_BUNDLE_ID}
 targets:
   CH348Driver:
     type: driver-extension
@@ -29,8 +30,8 @@ targets:
         SDKROOT: driverkit
         SUPPORTED_PLATFORMS: driverkit
         DRIVERKIT_DEPLOYMENT_TARGET: "23.0"
-        PRODUCT_BUNDLE_IDENTIFIER: com.idy.ch348-macos.driver
-        PRODUCT_NAME: com.idy.ch348-macos.driver
+        PRODUCT_BUNDLE_IDENTIFIER: "$(CH348_BUNDLE_ID).driver"
+        PRODUCT_NAME: "$(CH348_BUNDLE_ID).driver"
         INFOPLIST_FILE: Driver/Info.plist
         CODE_SIGN_ENTITLEMENTS: "$(CH348_DRIVER_ENTITLEMENTS)"
         HEADER_SEARCH_PATHS: ["$(SRCROOT)/Protocol"]
@@ -53,7 +54,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.idy.ch348-macos
+        PRODUCT_BUNDLE_IDENTIFIER: "$(CH348_BUNDLE_ID)"
         PRODUCT_NAME: CH348
         INFOPLIST_FILE: Installer/Info.plist
         CODE_SIGN_ENTITLEMENTS: Installer/Installer.entitlements

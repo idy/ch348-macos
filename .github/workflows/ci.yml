@@ -22,6 +22,12 @@ jobs:
         run: node --test Tests/test_site.js
       - name: Protocol and serial ring tests
         run: scripts/test.sh
+      - name: Build and package with a different developer bundle ID
+        run: |
+          CH348_BUNDLE_ID=com.example.ch348-ci scripts/build.sh --unsigned
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' build/Build/Products/Debug/CH348.app/Contents/Info.plist)" = com.example.ch348-ci
+          python3 scripts/package.py --unsigned
+          mv build build-custom-bundle
       - name: Build universal native driver and installer without signing
         run: scripts/build.sh --unsigned
       - name: Package and verify unsigned installer

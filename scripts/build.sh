@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
+export CH348_BUNDLE_ID="${CH348_BUNDLE_ID:-com.idy.ch348-macos}"
+# XcodeGen must resolve the embedded product filename before xcodebuild runs.
 xcodegen generate
 case "${1:-}" in
     --unsigned)
