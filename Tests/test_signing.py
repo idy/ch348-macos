@@ -1,7 +1,11 @@
 import importlib.util
 from pathlib import Path
+import plistlib
+import sys
+import tempfile
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 spec = importlib.util.spec_from_file_location(
     "signing", Path(__file__).resolve().parents[1] / "scripts/check-signing.py")
 signing = importlib.util.module_from_spec(spec)
@@ -9,6 +13,15 @@ spec.loader.exec_module(signing)
 
 
 class USBProfileTests(unittest.TestCase):
+    def test_bundle_identity_rejects_invalid_ids_before_constructing_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary)
+            (app / "Contents").mkdir()
+            for identifier in ("", "../other", "com.example/other", ["com.example.app"]):
+                (app / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": identifier}))
+                with self.subTest(identifier=identifier), self.assertRaisesRegex(ValueError, "Invalid installer"):
+                    signing.bundle_identity(app)
+
     def test_amfi_usb_profile_matching_and_explicit_development_consent(self):
         wildcard = [{"idVendor": "*"}]
         restricted = [{"idVendor": 0x1A86, "idProduct": 0x55D9}]

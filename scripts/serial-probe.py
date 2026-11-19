@@ -18,8 +18,7 @@ import time
 def configure(fd, baud):
     settings = termios.tcgetattr(fd)
     settings[0] = settings[1] = settings[3] = 0
-    settings[2] &= ~(termios.CSIZE | termios.PARENB | termios.CSTOPB |
-                     termios.CCTS_OFLOW | termios.CRTS_IFLOW)
+    settings[2] &= ~(termios.CSIZE | termios.PARENB | termios.CSTOPB | termios.CRTSCTS)
     settings[2] |= termios.CS8 | termios.CLOCAL | termios.CREAD
     settings[4] = settings[5] = termios.B9600
     settings[6][termios.VMIN] = settings[6][termios.VTIME] = 0

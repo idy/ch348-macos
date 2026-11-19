@@ -1,5 +1,48 @@
 # Validation
 
+## 2026-11-20
+
+Development-signed build `0.1.1/15` was installed over SSH with another team's
+bundle IDs and Apple-issued profiles containing the target Mac. The installer
+submitted activation without an `NSApplication` session. After the operator's
+initial macOS approval, two CH348 devices published all 16 native channels.
+Subsequent replacement required USB device reenumeration: registration of a new
+extension alone left the connected ports served by the previous build. The
+runtime build check confirmed build 15 on all 16 channels after reenumeration.
+SIP and system extension validation remained enabled. This was a software
+reenumeration, not a physical hot-plug or whole-Mac restart qualification.
+
+An unmodified application's pySerial 3.5 write/read path exposed `EINVAL` while
+updating a read timeout. On macOS, the custom-baud path temporarily submits
+38400 through `tcsetattr`, then restores the requested rate through
+`IOSSIOSPEED`. Skipping identical settings in build 14 did not fix this path.
+Build 15 validates and retains only the latest 12-byte configuration per active
+UART while its write is outstanding. It applies that configuration after both
+USB and UART completion, before publishing consumption or sending another
+packet. Close discards pending settings; retired clients remain busy; failed
+configuration terminates the transport. The existing TX watchdog remains in
+effect, with no polling worker or unbounded configuration queue.
+
+On the target, the original immediate write/read reproducer passed 10 times.
+Three unchanged application serial callers completed 48 open/configure/read
+timeout/close checks across the 16 channels. A further 800 one-byte carriage
+return write/read API cycles passed at 115200, 460800, 921600, 1500000 and
+2000000 baud. Driver counters recorded 810 submitted and completed bytes,
+including the reproducer. These are API and transmit-completion checks: no
+valid board reply was received. They do not establish a physical loopback,
+end-to-end UART data integrity, sustained throughput, BREAK/modem-pin behavior,
+or flashing readiness. No firmware was flashed or user data erased.
+
+All 56 Python tests passed with the universal build present. The protocol/ring
+executables and production-function configuration, completion and teardown
+harnesses passed with AddressSanitizer and UndefinedBehaviorSanitizer. New
+cases cover latest-setting coalescing, invalid-input rejection, both completion
+orders, close, retired ownership, independent UARTs, stopping and command
+failure. Default/custom bundle-ID packaging was verified earlier in this
+change; build 15 was rebuilt universally with the custom ID. Hosted CI had no
+runner for the first two attempts, so those cancelled jobs are not passing
+build evidence.
+
 ## 2026-11-04
 
 Host regression checks now compile the production receive, queue teardown, command recovery, and status-dispatch method bodies with memory-only substitutes for DriverKit services. The real C protocol and ring helpers are linked where used. AddressSanitizer and UndefinedBehaviorSanitizer are enabled. These harnesses check control flow and data handling, not the SDK ABI, native RPC scheduling, or physical hardware.

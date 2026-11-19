@@ -7,6 +7,7 @@ import json
 import plistlib
 import subprocess
 import sys
+from bundle_identity import bundle_identity
 
 
 def grants_ch348(items, allow_development_wildcard=False):
@@ -42,7 +43,7 @@ def validate(app, allow_development=False):
     device = hardware.get("provisioning_UDID", hardware.get("platform_UUID"))
     if not device:
         raise ValueError("Cannot determine this Mac's provisioning identifier")
-    extension = app / "Contents/Library/SystemExtensions/com.idy.ch348-macos.driver.dext"
+    app_identifier, extension = bundle_identity(app)
     for bundle, required in [
         (app, {"com.apple.developer.system-extension.install": True}),
         (extension, {"com.apple.developer.driverkit": True,
@@ -79,6 +80,8 @@ def validate(app, allow_development=False):
             if entitlements.get(key) != value or actual.get(key) != value:
                 raise ValueError(f"Profile does not grant {key}: {bundle.name}")
         if bundle == extension:
+            if info.get("CFBundleIdentifier") != app_identifier + ".driver":
+                raise ValueError("Driver bundle identifier does not match the installer")
             usb = entitlements.get("com.apple.developer.driverkit.transport.usb", [])
             signature_usb = actual.get("com.apple.developer.driverkit.transport.usb", [])
             if not usb_signature_matches(usb, signature_usb, allow_development):

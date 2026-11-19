@@ -202,7 +202,11 @@ kern_return_t IMPL(CH348Port, HwDeactivate) {
 }
 
 kern_return_t IMPL(CH348Port, HwProgramUART) {
-    if (ivars->owner == nullptr) return kIOReturnNotReady;
+    if (ivars->owner == nullptr || ivars->owner->IsStopping()) return kIOReturnNotReady;
+    // pySerial reapplies the same UART settings when changing a read timeout.
+    if (ivars->active && baudRate == ivars->baud && nDataBits == ivars->bits &&
+        nHalfStopBits == ivars->half_stops && parity == ivars->parity)
+        return kIOReturnSuccess;
     const auto result = ivars->owner->ConfigurePort(ivars->index, baudRate,
         nDataBits, nHalfStopBits, parity);
     if (result == kIOReturnSuccess) {

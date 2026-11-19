@@ -7,6 +7,7 @@ import select
 import threading
 import tty
 import unittest
+from unittest.mock import patch
 
 
 spec = importlib.util.spec_from_file_location(
@@ -85,6 +86,16 @@ class LoopbackProbeTests(unittest.TestCase):
 
     def test_passive_capture_silent_port_is_empty(self):
         self.assertEqual(probe.capture(self.slave, 0.02), b"")
+
+    def test_configure_supports_apple_python_without_individual_flow_flags(self):
+        settings = probe.termios.tcgetattr(self.slave)
+        settings[2] |= probe.termios.CRTSCTS
+        probe.termios.tcsetattr(self.slave, probe.termios.TCSANOW, settings)
+        with patch.dict(probe.termios.__dict__), patch.object(probe.fcntl, "ioctl"):
+            probe.termios.__dict__.pop("CCTS_OFLOW", None)
+            probe.termios.__dict__.pop("CRTS_IFLOW", None)
+            probe.configure(self.slave, 921600)
+        self.assertEqual(probe.termios.tcgetattr(self.slave)[2] & probe.termios.CRTSCTS, 0)
 
 
 if __name__ == "__main__":

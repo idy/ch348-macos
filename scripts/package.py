@@ -11,10 +11,10 @@ import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+from bundle_identity import bundle_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_ID = "com.idy.ch348-macos.pkg"
 
 
 def bundle_info(bundle, identifier, app=False):
@@ -38,10 +38,10 @@ def bundle_info(bundle, identifier, app=False):
     return info
 
 
-def verify_package(package, source, expanded, version):
+def verify_package(package, source, expanded, version, package_id):
     subprocess.run(["pkgutil", "--expand-full", str(package), str(expanded)], check=True)
     metadata = ET.parse(expanded / "PackageInfo").getroot()
-    if (metadata.get("identifier") != PACKAGE_ID or metadata.get("version") != version
+    if (metadata.get("identifier") != package_id or metadata.get("version") != version
             or metadata.get("install-location") != "/" or metadata.get("relocatable") != "false"
             or metadata.find("scripts") is not None):
         raise ValueError("Unexpected package metadata or installation scripts")
@@ -76,9 +76,10 @@ def main():
         raise ValueError(f"App not found: {app}; run scripts/build.sh --unsigned first")
     if any(path.suffix in {".provisionprofile", ".mobileprovision"} for path in app.rglob("*")):
         raise ValueError("Unsigned packages must not include provisioning profiles; rebuild without signing")
-    info = bundle_info(app, "com.idy.ch348-macos", app=True)
-    driver = app / "Contents/Library/SystemExtensions/com.idy.ch348-macos.driver.dext"
-    driver_info = bundle_info(driver, "com.idy.ch348-macos.driver")
+    identifier, driver = bundle_identity(app)
+    info = bundle_info(app, identifier, app=True)
+    driver_info = bundle_info(driver, identifier + ".driver")
+    package_id = identifier + ".pkg"
     version = str(info.get("CFBundleShortVersionString", ""))
     build = str(info.get("CFBundleVersion", ""))
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", version) or not re.fullmatch(r"[0-9]+", build):
@@ -105,9 +106,9 @@ def main():
         components.write_bytes(plistlib.dumps(settings))
         package = work / name
         subprocess.run(["pkgbuild", "--root", str(root), "--component-plist", str(components),
-                        "--identifier", PACKAGE_ID, "--version", package_version,
+                        "--identifier", package_id, "--version", package_version,
                         "--install-location", "/", "--ownership", "recommended", str(package)], check=True)
-        verify_package(package, app, work / "expanded", package_version)
+        verify_package(package, app, work / "expanded", package_version, package_id)
         checksum = work / "SHA256SUMS"
         checksum.write_text(f"{hashlib.sha256(package.read_bytes()).hexdigest()}  {name}\n")
         shutil.move(str(package), str(output / name))

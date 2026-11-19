@@ -62,6 +62,16 @@ scripts/install.sh --development
 
 The signed build first provisions the concrete **My Mac (DriverKit)** destination, then embeds the extension into the installer. This ensures that the driver's profile includes the current Mac as well as the expected USB/Serial entitlements. Profiles that omit this Mac are rejected before installation.
 
+Bundle IDs are globally registered with Apple. When using a different developer team, select an available installer ID as well as the team:
+
+```sh
+CH348_DEVELOPMENT_TEAM=YOUR_TEAM_ID CH348_BUNDLE_ID=com.yourcompany.ch348 scripts/build.sh --development
+```
+
+The driver uses that ID plus `.driver`, and the package uses `.pkg`; the installer and validation scripts derive these identities from the built app. The default remains `com.idy.ch348-macos`. The installer refuses to overwrite an existing `/Applications/CH348.app` with a different bundle ID; uninstall the previous driver before switching identities.
+
+`scripts/build.sh` sets the bundle ID before generating the project so the embedded driver filename also matches. If running XcodeGen directly, set `CH348_BUNDLE_ID` in its environment, including when using the default ID.
+
 For an appropriately approved non-development USB grant, keep `Driver/Driver.entitlements` and use:
 
 ```sh
@@ -69,7 +79,9 @@ CH348_DEVELOPMENT_TEAM=YOUR_TEAM_ID scripts/build.sh
 scripts/install.sh
 ```
 
-The installer script first validates the signatures, profile expiration, bundle IDs, signing teams, and required entitlements. It then copies the app to `/Applications/CH348.app` and requests activation using Apple's System Extensions framework. The global `/Applications` directory is required; macOS rejects activation from `~/Applications` with `OSSystemExtensionErrorDomain` code 3. If the script cannot write there, copy the signed app using Finder and open it. Complete any macOS approval prompt. Keep the app installed because it contains the registered extension. To remove the driver, open the app and choose **Uninstall**.
+The installer script first validates the signatures, profile expiration, bundle IDs, signing teams, and required entitlements. It then copies the app to `/Applications/CH348.app` and runs its `--activate` entry point without creating a window or requiring a desktop launch session. This supports SSH installation; macOS approval is still required in the current desktop session. The CLI waits up to 120 seconds and exits with 0 on completion, 2 if a restart is required, 1 on failure, or 124 on timeout. If approval takes longer, approve the extension and run the installer again.
+
+The global `/Applications` directory is required; macOS rejects activation from `~/Applications` with `OSSystemExtensionErrorDomain` code 3. If the script cannot write there, copy the signed app using Finder and open it. Complete any macOS approval prompt. Keep the app installed because it contains the registered extension. To remove the driver, open the app and choose **Uninstall**.
 
 No script changes SIP, boot security, NVRAM, system extension developer mode, or USB device firmware. If normal signing or activation fails, resolve the reported account/profile/approval problem before proceeding.
 
