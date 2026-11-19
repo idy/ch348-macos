@@ -28,6 +28,8 @@ struct CH348Device_IVars {
     OSAction *timeout_action;
     CH348Port *ports[8];
     bool active[8];
+    bool configuration_pending[8];
+    uint8_t pending_configuration[8][CH348_CONFIG_SIZE];
     uint32_t location;
     uint32_t max_transmit;
     uint32_t tx_port;
@@ -266,17 +268,27 @@ kern_return_t CH348Device::WriteRegister(uint32_t port, uint8_t reg,
 
 kern_return_t CH348Device::ConfigurePort(uint32_t port, uint32_t baud,
                                         uint8_t bits, uint8_t halfStops, uint8_t parity) {
+    if (ivars->stopping) return kIOReturnNotReady;
     if (port >= 8 || (halfStops != 2 && halfStops != 4) ||
         parity < PD_RS232_PARITY_NONE || parity > PD_RS232_PARITY_EVEN) return kIOReturnUnsupported;
-    if (ivars->tx_busy && ivars->tx_port == port) return kIOReturnBusy;
     uint8_t command[CH348_CONFIG_SIZE];
     if (ch348_encode_config(command, port, baud, bits, halfStops / 2, parity - 1) != 0)
         return kIOReturnBadArgument;
-    return Command(command, sizeof(command));
+    if (ivars->tx_busy && ivars->tx_port == port) {
+        if (!ivars->active[port] || ivars->tx_discard) return kIOReturnBusy;
+        // Coalesce pySerial's temporary standard baud and following IOSSIOSPEED.
+        memcpy(ivars->pending_configuration[port], command, sizeof(command));
+        ivars->configuration_pending[port] = true;
+        return kIOReturnSuccess;
+    }
+    const auto result = Command(command, sizeof(command));
+    if (result == kIOReturnSuccess) ivars->configuration_pending[port] = false;
+    return result;
 }
 
 kern_return_t CH348Device::SetPortActive(uint32_t port, bool active) {
     if (port >= 8) return kIOReturnBadArgument;
+    if (!active) ivars->configuration_pending[port] = false;
     // Retire an old client's completion without advancing a newly opened ring.
     if (!active && ivars->tx_busy && ivars->tx_port == port) {
         ivars->tx_discard = true;
@@ -396,6 +408,11 @@ void IMPL(CH348Device, TransmitComplete) {
 
 void CH348Device::FinishTransmit() {
     if (!ivars->tx_busy || !ivars->tx_usb_done || !ivars->tx_uart_done || ivars->stopping) return;
+    if (ivars->configuration_pending[ivars->tx_port]) {
+        const auto result = Command(ivars->pending_configuration[ivars->tx_port], CH348_CONFIG_SIZE);
+        if (result != kIOReturnSuccess) { Fail(result); return; }
+        ivars->configuration_pending[ivars->tx_port] = false;
+    }
     if (!ivars->tx_discard) ivars->ports[ivars->tx_port]->ConsumeTransmit(ivars->tx_size);
     if (!ivars->active[ivars->tx_port]) {
         const auto result = WriteRegister(ivars->tx_port, 1, 0, false);

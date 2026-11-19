@@ -49,6 +49,7 @@ struct CH348Port {
     void ReportLineError(uint8_t s) { ++errors; line = s; }
 };
 struct CH348Device_IVars {
+    bool configuration_pending[8] = {};
     CH348Port *ports[CH348_PORT_COUNT] = {};
     Address addresses[1];
     Pipe *pipes[1] = {};

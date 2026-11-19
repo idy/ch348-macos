@@ -25,6 +25,7 @@ HOST_STUBS = r'''
 
 using kern_return_t = int;
 constexpr int kIOReturnSuccess = 0, kIOReturnBadArgument = -1;
+constexpr unsigned CH348_CONFIG_SIZE = 12;
 uint8_t ch348_register(unsigned, uint8_t) {
     assert(false && "Teardown must not request an activation-only modem query");
     return 0;
@@ -82,6 +83,8 @@ struct CH348Port : SerialBase {
     void TxFreeSpaceAvailable() { ++notifications; }
 };
 struct CH348Device_IVars {
+    bool configuration_pending[8] = {};
+    uint8_t pending_configuration[8][CH348_CONFIG_SIZE] = {};
     CH348Port *ports[8] = {};
     bool active[8] = {};
     bool stopping = false, tx_busy = true, tx_usb_done = false;
