@@ -26,6 +26,7 @@ jobs:
         run: |
           CH348_BUNDLE_ID=com.example.ch348-ci scripts/build.sh --unsigned
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' build/Build/Products/Debug/CH348.app/Contents/Info.plist)" = com.example.ch348-ci
+          python3 -m unittest discover -s Tests -p test_installer_cli.py
           python3 scripts/package.py --unsigned
           mv build build-custom-bundle
       - name: Build universal native driver and installer without signing

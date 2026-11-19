@@ -1,15 +1,26 @@
 import AppKit
+import Darwin
+import Dispatch
 import SystemExtensions
 
 @main
 final class Installer: NSObject, NSApplicationDelegate, OSSystemExtensionRequestDelegate {
     private let identifier = Bundle.main.bundleIdentifier! + ".driver"
-    private let status = NSTextField(wrappingLabelWithString: "Install the CH348 serial driver to publish eight system serial ports.")
+    private let headless = CommandLine.arguments.contains("--activate")
+    private lazy var status = NSTextField(wrappingLabelWithString: "Install the CH348 serial driver to publish eight system serial ports.")
     private var window: NSWindow!
 
     static func main() {
-        let app = NSApplication.shared
         let delegate = Installer()
+        if delegate.headless {
+            delegate.install()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 120) {
+                delegate.report("Activation timed out; complete macOS approval and run the installer again.")
+                exit(124)
+            }
+            dispatchMain()
+        }
+        let app = NSApplication.shared
         app.delegate = delegate
         app.setActivationPolicy(.regular)
         app.run()
@@ -36,11 +47,19 @@ final class Installer: NSObject, NSApplicationDelegate, OSSystemExtensionRequest
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        if CommandLine.arguments.contains("--activate") { install() }
+    }
+
+    private func report(_ message: String) {
+        if headless {
+            print(message)
+            fflush(stdout)
+        } else {
+            status.stringValue = message
+        }
     }
 
     @objc private func install() {
-        status.stringValue = "Requesting driver activation…"
+        report("Requesting driver activation: \(identifier)")
         let request = OSSystemExtensionRequest.activationRequest(forExtensionWithIdentifier: identifier, queue: .main)
         request.delegate = self
         OSSystemExtensionManager.shared.submitRequest(request)
@@ -53,22 +72,24 @@ final class Installer: NSObject, NSApplicationDelegate, OSSystemExtensionRequest
     }
 
     func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
-        status.stringValue = "Approve CH348 in System Settings → General → Login Items & Extensions → Driver Extensions."
+        report("Approve CH348 in System Settings → General → Login Items & Extensions → Driver Extensions.")
     }
 
     func request(_ request: OSSystemExtensionRequest, actionForReplacingExtension existing: OSSystemExtensionProperties,
                  withExtension ext: OSSystemExtensionProperties) -> OSSystemExtensionRequest.ReplacementAction { .replace }
 
     func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
-        status.stringValue = result == .completed
+        report(result == .completed
             ? "Driver registration completed. Connect the CH348 and verify eight IOSerialBSDClient ports."
-            : "Registration requires a Mac restart before it takes effect."
+            : "Registration requires a Mac restart before it takes effect.")
         NSLog("CH348 activation result: %ld", result.rawValue)
+        if headless { exit(result == .completed ? 0 : 2) }
     }
 
     func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
-        status.stringValue = "Activation failed: \(error.localizedDescription)\n\((error as NSError).domain) code \((error as NSError).code). Check the DriverKit provisioning profile and signature."
+        report("Activation failed: \(error.localizedDescription)\n\((error as NSError).domain) code \((error as NSError).code). Check the DriverKit provisioning profile and signature.")
         NSLog("CH348 activation failed: %@", String(describing: error))
+        if headless { exit(1) }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

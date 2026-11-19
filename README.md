@@ -79,7 +79,9 @@ CH348_DEVELOPMENT_TEAM=YOUR_TEAM_ID scripts/build.sh
 scripts/install.sh
 ```
 
-The installer script first validates the signatures, profile expiration, bundle IDs, signing teams, and required entitlements. It then copies the app to `/Applications/CH348.app` and requests activation using Apple's System Extensions framework. The global `/Applications` directory is required; macOS rejects activation from `~/Applications` with `OSSystemExtensionErrorDomain` code 3. If the script cannot write there, copy the signed app using Finder and open it. Complete any macOS approval prompt. Keep the app installed because it contains the registered extension. To remove the driver, open the app and choose **Uninstall**.
+The installer script first validates the signatures, profile expiration, bundle IDs, signing teams, and required entitlements. It then copies the app to `/Applications/CH348.app` and runs its `--activate` entry point without creating a window or requiring a desktop launch session. This supports SSH installation; macOS approval is still required in the current desktop session. The CLI waits up to 120 seconds and exits with 0 on completion, 2 if a restart is required, 1 on failure, or 124 on timeout. If approval takes longer, approve the extension and run the installer again.
+
+The global `/Applications` directory is required; macOS rejects activation from `~/Applications` with `OSSystemExtensionErrorDomain` code 3. If the script cannot write there, copy the signed app using Finder and open it. Complete any macOS approval prompt. Keep the app installed because it contains the registered extension. To remove the driver, open the app and choose **Uninstall**.
 
 No script changes SIP, boot security, NVRAM, system extension developer mode, or USB device firmware. If normal signing or activation fails, resolve the reported account/profile/approval problem before proceeding.
 

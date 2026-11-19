@@ -27,4 +27,4 @@ if [ -e "$destination" ]; then
     fi
 fi
 ditto "$app" "$destination"
-open -n "$destination" --args --activate
+exec "$destination/Contents/MacOS/CH348" --activate
